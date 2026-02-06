@@ -1,0 +1,15 @@
+# Dart
+.dart_tool/
+.packages
+pubspec.lock
+*.g.dart
+build/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.code-workspace
+
+# Logs
+*.log

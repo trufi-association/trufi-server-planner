@@ -1,0 +1,22 @@
+services:
+  planner:
+    container_name: trufi-planner
+    build:
+      context: .
+    restart: unless-stopped
+    mem_limit: 2g
+    ports:
+      - "9090:9090"
+    environment:
+      PORT: 9090
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  default:
+    name: trufi-server
+    external: true

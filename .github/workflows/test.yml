@@ -1,0 +1,41 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Dart
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: stable
+
+    - name: Install dependencies
+      run: dart pub get
+
+    - name: Build Docker image
+      run: docker build -t trufi-server-planner:test .
+
+    - name: Start server
+      run: |
+        docker run -d -p 9090:8080 --name trufi-test trufi-server-planner:test
+        sleep 20
+
+    - name: Run integration tests
+      run: dart test test/integration_test.dart
+
+    - name: Show server logs on failure
+      if: failure()
+      run: docker logs trufi-test
+
+    - name: Stop server
+      if: always()
+      run: docker stop trufi-test && docker rm trufi-test
