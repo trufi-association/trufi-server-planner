@@ -5,14 +5,12 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf_static/shelf_static.dart';
 import 'package:latlong2/latlong.dart';
-
-import '../lib/src/parser/gtfs_parser.dart';
-import '../lib/src/index/spatial_index.dart';
-import '../lib/src/services/route_finder.dart';
+import 'package:trufi_core_planner/trufi_core_planner.dart';
 
 late GtfsData gtfsData;
-late SpatialIndex spatialIndex;
-late RouteFinder routeFinder;
+late GtfsSpatialIndex spatialIndex;
+late GtfsRoutingService routingService;
+late GtfsRouteIndex routeIndex;
 
 Future<void> main() async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
@@ -24,13 +22,15 @@ Future<void> main() async {
     // Load GTFS data
     gtfsData = await GtfsParser.parseFromFile('gtfs_data.zip');
 
-    // Build spatial index
-    spatialIndex = SpatialIndex(gtfsData.stops);
+    // Build indices
+    spatialIndex = GtfsSpatialIndex(gtfsData.stops);
+    routeIndex = GtfsRouteIndex(gtfsData);
 
-    // Create route finder
-    routeFinder = RouteFinder(
+    // Create routing service
+    routingService = GtfsRoutingService(
       data: gtfsData,
       spatialIndex: spatialIndex,
+      routeIndex: routeIndex,
     );
 
     print('✓ GTFS data loaded successfully');
@@ -105,6 +105,7 @@ Response _healthHandler(Request request) {
         'stops': gtfsData.stops.length,
         'routes': gtfsData.routes.length,
         'trips': gtfsData.trips.length,
+        'shapes': gtfsData.shapes.length,
       },
     }),
     headers: {'Content-Type': 'application/json'},
@@ -150,7 +151,10 @@ Future<Response> _nearbyStopsHandler(Request request) async {
 
     return Response.ok(
       jsonEncode({
-        'stops': nearbyStops.map((ns) => ns.toJson()).toList(),
+        'stops': nearbyStops.map((ns) => {
+          ...ns.stop.toJson(),
+          'distance': ns.distance,
+        }).toList(),
         'count': nearbyStops.length,
       }),
       headers: {'Content-Type': 'application/json'},
@@ -194,8 +198,8 @@ Future<Response> _planHandler(Request request) async {
       );
     }
 
-    // Find routes using the route finder
-    final paths = routeFinder.findRoutes(
+    // Find routes using the routing service
+    final paths = routingService.findRoutes(
       origin: LatLng(fromLat, fromLon),
       destination: LatLng(toLat, toLon),
       maxWalkDistance: 500,

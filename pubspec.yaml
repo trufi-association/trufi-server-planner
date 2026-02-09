@@ -12,17 +12,16 @@ dependencies:
   shelf_router: ^1.1.4
   shelf_static: ^1.1.3
 
-  # GTFS data handling
-  archive: ^4.0.4
-  latlong2: ^0.9.1
+  # GTFS routing (shared with trufi_core_routing)
+  trufi_core_planner:
+    path: ../trufi-core/packages/trufi_core_planner
+
+  # Additional dependencies
   collection: ^1.18.0
   http: ^1.2.2
 
   # JSON encoding
   json_annotation: ^4.9.0
-
-  # Note: trufi_core_routing was used for reference but our
-  # implementation is independent and doesn't require it
 
 dev_dependencies:
   lints: ^5.1.1

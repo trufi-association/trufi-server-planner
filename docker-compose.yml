@@ -2,7 +2,8 @@ services:
   planner:
     container_name: trufi-planner
     build:
-      context: .
+      context: ..
+      dockerfile: trufi-server-planner/Dockerfile
     restart: unless-stopped
     mem_limit: 2g
     ports:

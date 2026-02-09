@@ -18,9 +18,25 @@ Similar a [trufi-server-photon](../trufi-server-photon) pero para planificación
 - 🚌 **Routing Offline**: Usa datos GTFS locales sin conexión a internet
 - 🔍 **Búsqueda de paradas**: Encuentra paradas cercanas a coordenadas
 - 🗺️ **Planificación de rutas**: Calcula rutas entre dos puntos
-- 📍 **Índice espacial**: Búsqueda rápida de paradas cercanas
+- 📍 **Índice espacial**: Búsqueda rápida de paradas cercanas (KD-Tree)
 - 🐳 **Docker**: Fácil despliegue con Docker Compose
 - 🔌 **API REST**: Endpoints HTTP simples y documentados
+- 📦 **Código compartido**: Usa `trufi_core_planner` (mismo algoritmo que trufi-app)
+
+## Arquitectura
+
+Este servidor utiliza **`trufi_core_planner`**, un paquete compartido que contiene la lógica central de parsing GTFS y routing. Esto garantiza que el algoritmo de routing sea **idéntico** en:
+
+- 📱 **trufi-app** (Flutter mobile/web) → usa `trufi_core_routing` → usa `trufi_core_planner`
+- 🖥️ **trufi-server-planner** (servidor Dart) → usa `trufi_core_planner` directamente
+
+**Ventajas:**
+- ✅ No hay duplicación de código
+- ✅ El mismo GTFS produce las mismas rutas en web y móvil
+- ✅ Los bugs se corrigen una vez para todos
+- ✅ Más fácil de mantener y probar
+
+Ver [MIGRATION.md](../trufi-core/packages/trufi_core_planner/MIGRATION.md) para más detalles.
 
 ## Requisitos
 

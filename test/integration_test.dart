@@ -67,16 +67,16 @@ void main() {
       final stops = data['stops'] as List;
       expect(stops.length, greaterThan(0));
 
-      // Check first stop has distance
+      // Check first stop has distance and stop fields at top level
       final firstStop = stops[0] as Map<String, dynamic>;
       expect(firstStop['distance'], isNotNull);
       expect(firstStop['distance'], lessThanOrEqualTo(500));
-      expect(firstStop['stop'], isNotNull);
-      expect(firstStop['stop']['name'], isNotNull);
+      expect(firstStop['name'], isNotNull);
+      expect(firstStop['id'], isNotNull);
 
       print('✓ Nearby stops passed');
       print('  - Found ${stops.length} stops within 500m');
-      print('  - Closest: ${firstStop['stop']['name']} at ${firstStop['distance']}m');
+      print('  - Closest: ${firstStop['name']} at ${firstStop['distance']}m');
     });
 
     test('List routes returns data', () async {

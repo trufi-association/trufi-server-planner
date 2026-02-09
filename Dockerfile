@@ -2,12 +2,22 @@ FROM dart:stable AS build
 
 WORKDIR /app
 
-# Copy pubspec files and get dependencies
-COPY pubspec.* ./
+# Copy trufi_core_planner dependency
+COPY trufi-core/packages/trufi_core_planner /deps/trufi_core_planner
+
+# Copy pubspec files
+COPY trufi-server-planner/pubspec.* ./
+
+# Update pubspec to use local dependency path
+RUN sed -i 's|path: ../trufi-core/packages/trufi_core_planner|path: /deps/trufi_core_planner|g' pubspec.yaml
+
+# Get dependencies
 RUN dart pub get
 
-# Copy source code
-COPY . .
+# Copy only the source files (not pubspec again)
+COPY trufi-server-planner/bin ./bin
+COPY trufi-server-planner/gtfs_data.zip ./gtfs_data.zip
+COPY trufi-server-planner/web ./web
 
 # Compile the server
 RUN dart compile exe bin/server.dart -o bin/server
@@ -17,15 +27,15 @@ FROM debian:bookworm-slim
 
 # Install runtime dependencies
 RUN apt-get update && \
-    apt-get install -y ca-certificates && \
+    apt-get install -y ca-certificates wget && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Copy compiled binary, GTFS data, and web files
 COPY --from=build /app/bin/server /app/server
-COPY gtfs_data.zip /app/gtfs_data.zip
-COPY web /app/web
+COPY --from=build /app/gtfs_data.zip /app/gtfs_data.zip
+COPY --from=build /app/web /app/web
 
 # Expose port
 EXPOSE 8080
