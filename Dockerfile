@@ -14,7 +14,8 @@ RUN sed -i 's|path: ../trufi-core/packages/trufi_core_planner|path: /deps/trufi_
 # Get dependencies
 RUN dart pub get
 
-# Copy only the source files (not pubspec again)
+# Copy source files
+COPY trufi-server-planner/lib ./lib
 COPY trufi-server-planner/bin ./bin
 COPY trufi-server-planner/gtfs_data.zip ./gtfs_data.zip
 COPY trufi-server-planner/web ./web
@@ -42,7 +43,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
 
 # Run the server
 ENTRYPOINT ["/app/server"]

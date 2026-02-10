@@ -11,5 +11,8 @@ build/
 *.iml
 *.code-workspace
 
+# Flutter web build (generated artifact)
+web/
+
 # Logs
 *.log
