@@ -1,0 +1,7 @@
+{
+  "name": "planner",
+  "description": "Offline GTFS transit routing and Flutter web app for Trufi",
+  "container": "trufi-planner",
+  "port": 8080,
+  "analytics": true
+}
