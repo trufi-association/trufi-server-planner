@@ -8,8 +8,8 @@ COPY trufi-core/packages/trufi_core_planner /deps/trufi_core_planner
 # Copy pubspec files
 COPY trufi-server-planner/pubspec.* ./
 
-# Update pubspec to use local dependency path
-RUN sed -i 's|path: ../trufi-core/packages/trufi_core_planner|path: /deps/trufi_core_planner|g' pubspec.yaml
+# Override git dependency with local path for Docker build
+RUN sed -i '/trufi_core_planner:/,/path: packages\/trufi_core_planner/{s|git:|# git:|;s|url:.*|# &|;s|ref:.*|# &|;s|path: packages/trufi_core_planner|path: /deps/trufi_core_planner|}' pubspec.yaml
 
 # Get dependencies
 RUN dart pub get

@@ -14,7 +14,10 @@ dependencies:
 
   # GTFS routing (shared with trufi_core_routing)
   trufi_core_planner:
-    path: ../trufi-core/packages/trufi_core_planner
+    git:
+      url: https://github.com/trufi-association/trufi-core.git
+      ref: v5.3.0
+      path: packages/trufi_core_planner
 
   # Additional dependencies
   collection: ^1.18.0
