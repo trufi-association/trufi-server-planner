@@ -4,6 +4,8 @@ services:
     build:
       context: ..
       dockerfile: trufi-server-planner/Dockerfile
+    volumes:
+      - ./web:/app/web
     restart: unless-stopped
     mem_limit: 2g
     # ports:

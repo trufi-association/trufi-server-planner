@@ -18,7 +18,6 @@ RUN dart pub get
 COPY trufi-server-planner/lib ./lib
 COPY trufi-server-planner/bin ./bin
 COPY trufi-server-planner/gtfs_data.zip ./gtfs_data.zip
-COPY trufi-server-planner/web ./web
 
 # Compile the server
 RUN dart compile exe bin/server.dart -o bin/server
@@ -33,10 +32,9 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Copy compiled binary, GTFS data, and web files
+# Copy compiled binary and GTFS data
 COPY --from=build /app/bin/server /app/server
 COPY --from=build /app/gtfs_data.zip /app/gtfs_data.zip
-COPY --from=build /app/web /app/web
 
 # Expose port
 EXPOSE 8080
