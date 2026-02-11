@@ -2,10 +2,10 @@ services:
   planner:
     container_name: trufi-planner
     build:
-      context: ..
-      dockerfile: trufi-server-planner/Dockerfile
+      context: .
     volumes:
       - ./web:/app/web
+      - ./gtfs_data.zip:/app/gtfs_data.zip
     restart: unless-stopped
     mem_limit: 2g
     # ports:

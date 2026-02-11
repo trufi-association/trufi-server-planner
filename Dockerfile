@@ -2,22 +2,13 @@ FROM dart:stable AS build
 
 WORKDIR /app
 
-# Copy trufi_core_planner dependency
-COPY trufi-core/packages/trufi_core_planner /deps/trufi_core_planner
-
-# Copy pubspec files
-COPY trufi-server-planner/pubspec.* ./
-
-# Override git dependency with local path for Docker build
-RUN sed -i '/trufi_core_planner:/,/path: packages\/trufi_core_planner/{s|git:|# git:|;s|url:.*|# &|;s|ref:.*|# &|;s|path: packages/trufi_core_planner|path: /deps/trufi_core_planner|}' pubspec.yaml
-
-# Get dependencies
+# Copy pubspec files and get dependencies (from git)
+COPY pubspec.* ./
 RUN dart pub get
 
 # Copy source files
-COPY trufi-server-planner/lib ./lib
-COPY trufi-server-planner/bin ./bin
-COPY trufi-server-planner/gtfs_data.zip ./gtfs_data.zip
+COPY lib ./lib
+COPY bin ./bin
 
 # Compile the server
 RUN dart compile exe bin/server.dart -o bin/server
@@ -32,9 +23,8 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Copy compiled binary and GTFS data
+# Copy compiled binary
 COPY --from=build /app/bin/server /app/server
-COPY --from=build /app/gtfs_data.zip /app/gtfs_data.zip
 
 # Expose port
 EXPOSE 8080
