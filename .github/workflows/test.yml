@@ -21,12 +21,20 @@ jobs:
     - name: Install dependencies
       run: dart pub get
 
+    - name: Prepare test data
+      run: |
+        mkdir -p web
+        echo '<html><head><title>Trufi</title></head><body>Trufi App</body></html>' > web/index.html
+
     - name: Build Docker image
       run: docker build -t trufi-server-planner:test .
 
     - name: Start server
       run: |
-        docker run -d -p 9090:8080 --name trufi-test trufi-server-planner:test
+        docker run -d -p 9090:8080 --name trufi-test \
+          -v ${{ github.workspace }}/gtfs_data.zip:/app/gtfs_data.zip \
+          -v ${{ github.workspace }}/web:/app/web \
+          trufi-server-planner:test
         sleep 20
 
     - name: Run integration tests
