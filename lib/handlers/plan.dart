@@ -22,11 +22,26 @@ Future<Response> planHandler(Request request) async {
       );
     }
 
+    // Honor the client's requested result count and walk radius, bounded
+    // to keep responses small and searches local. Older clients that
+    // don't send them get the defaults.
+    final maxResults = ((json['maxResults'] as num?)?.toInt() ?? 20).clamp(
+      1,
+      20,
+    );
+    final maxWalkDistance =
+        ((json['maxWalkDistance'] as num?)?.toDouble() ?? 800.0).clamp(
+      100.0,
+      2000.0,
+    );
+
     final paths = routingService.findRoutes(
       origin: LatLng(fromLat, fromLon),
       destination: LatLng(toLat, toLon),
-      maxWalkDistance: 500,
-      maxResults: 5,
+      maxWalkDistance: maxWalkDistance,
+      maxResults: maxResults,
+      maxDirects: maxResults,
+      maxTransferPaths: maxResults,
     );
 
     if (paths.isEmpty) {

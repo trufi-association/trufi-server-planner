@@ -220,6 +220,19 @@ const _openApiSpec = {
                       'lon': {'type': 'number', 'example': -66.147902},
                     },
                   },
+                  'maxResults': {
+                    'type': 'integer',
+                    'description':
+                        'Maximum paths to return (1-20). Defaults to 20.',
+                    'example': 20,
+                  },
+                  'maxWalkDistance': {
+                    'type': 'number',
+                    'description':
+                        'Walk radius to board/alight, in meters '
+                        '(100-2000). Defaults to 800.',
+                    'example': 800,
+                  },
                 },
               },
             },
