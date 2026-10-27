@@ -245,6 +245,8 @@ Son los campos que manda el `RemotePlannerClient` de trufi-core (`TrufiPlannerCo
 
 Los archivos de `web/` salen con `Content-Encoding: gzip` cuando el cliente manda `Accept-Encoding: gzip` (`main.dart.js` 5,0 MB → 1,4 MB; `search.json` 1,4 MB → 0,36 MB). Los tipos ya comprimidos (PNG, WOFF2, ZIP…), los cuerpos de menos de 512 bytes, los `304`, los `HEAD` y las respuestas parciales (`Range`) van tal cual; `/api/*` no se toca.
 
+Al arrancar, el servidor escribe un `<archivo>.gz` al lado de cada JS/WASM/JSON/HTML/CSS/MAP de `web/` (comprimido una vez a nivel 9; `PRECOMPRESS_WEB=0` lo desactiva, `dart run bin/precompress.dart web` lo hace a mano) y lo sirve tal cual cuando el cliente acepta gzip: una carga en frío de `main.dart.js` es una lectura de archivo, no ~140 ms de CPU. Un sidecar más viejo que su archivo (build nuevo copiado encima) se ignora y se regenera en el siguiente arranque.
+
 `Cache-Control`: `no-cache` para todo el build (Flutter no pone hash en los nombres, así que el navegador guarda los bytes pero revalida con `ETag`/`Last-Modified` y recibe `304`), y `public, max-age=31536000, immutable` para nombres con hash de contenido (`main.dart.<hash>.js`, lo que produce `flutter build web --web-content-hash`). Lógica y tests: `lib/web_app.dart`, `test/web_app_test.dart`.
 
 ### Archivo GTFS
