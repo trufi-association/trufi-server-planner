@@ -352,6 +352,185 @@ void main() {
     });
   });
 
+  group('precompressed sidecars', () {
+    late List<int> bootstrapJs;
+    late List<int> sidecarBytes;
+
+    setUpAll(() async {
+      final root = webDir.path;
+      bootstrapJs = utf8.encode(
+        List.generate(100, (i) => 'window.boot$i = function(){};\n').join(),
+      );
+      await File('$root/flutter_bootstrap.js').writeAsBytes(bootstrapJs);
+      // Deliberately NOT gzip(bootstrapJs): the only way to tell "served the
+      // sidecar" from "gzipped the file on the fly" is a body that decodes
+      // to something else.
+      sidecarBytes = gzip.encode(
+        utf8.encode('/* served from flutter_bootstrap.js.gz */'),
+      );
+      await File('$root/flutter_bootstrap.js.gz').writeAsBytes(sidecarBytes);
+    });
+
+    test(
+      'a fresh sidecar is served as-is, with its own length and ETag',
+      () async {
+        final response = await handler(
+          request(
+            '/flutter_bootstrap.js',
+            headers: {'accept-encoding': 'gzip'},
+          ),
+        );
+        expect(response.statusCode, 200);
+        expect(response.headers['content-encoding'], 'gzip');
+        expect(response.headers['content-length'], '${sidecarBytes.length}');
+        expect(response.headers['content-type'], contains('javascript'));
+        expect(response.headers['etag'], startsWith('"gz-'));
+        expect(response.headers['last-modified'], isNotNull);
+        expect(response.headers['vary'], 'Accept-Encoding');
+        expect(response.headers['cache-control'], 'no-cache');
+        expect(response.headers['accept-ranges'], isNull);
+        expect(await bodyOf(response), sidecarBytes);
+      },
+    );
+
+    test('without Accept-Encoding the file itself is served', () async {
+      final response = await handler(request('/flutter_bootstrap.js'));
+      expect(response.statusCode, 200);
+      expect(response.headers['content-encoding'], isNull);
+      expect(response.headers['content-length'], '${bootstrapJs.length}');
+      expect(await bodyOf(response), bootstrapJs);
+    });
+
+    test('a sidecar older than its file is ignored: gzip on the fly', () async {
+      final root = webDir.path;
+      final original = File('$root/version.json');
+      final stale = File('$root/version.json.gz');
+      await stale.writeAsBytes(gzip.encode(utf8.encode('{"stale":true}')));
+      await stale.setLastModified(
+        (await original.lastModified()).subtract(const Duration(hours: 1)),
+      );
+      addTearDown(() => stale.delete());
+
+      final response = await handler(
+        request('/version.json', headers: {'accept-encoding': 'gzip'}),
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['etag'], isNot(startsWith('"gz-')));
+      final body = await bodyOf(response);
+      // version.json is under 512 bytes: on the fly it stays identity,
+      // which is exactly the point — the stale gzip never reached the wire.
+      expect(response.headers['content-encoding'], isNull);
+      expect(body, await original.readAsBytes());
+    });
+
+    test('HEAD and Range requests never use the sidecar', () async {
+      final head = await handler(
+        request(
+          '/flutter_bootstrap.js',
+          method: 'HEAD',
+          headers: {'accept-encoding': 'gzip'},
+        ),
+      );
+      expect(head.statusCode, 200);
+      expect(head.headers['content-encoding'], isNull);
+      expect(head.headers['content-length'], '${bootstrapJs.length}');
+      expect(await bodyOf(head), isEmpty);
+
+      final range = await handler(
+        request(
+          '/flutter_bootstrap.js',
+          headers: {'accept-encoding': 'gzip', 'range': 'bytes=0-9'},
+        ),
+      );
+      expect(range.statusCode, 206);
+      expect(range.headers['content-encoding'], isNull);
+      expect(await bodyOf(range), bootstrapJs.sublist(0, 10));
+    });
+
+    test('If-None-Match with the sidecar ETag is a bare 304', () async {
+      final first = await handler(
+        request('/flutter_bootstrap.js', headers: {'accept-encoding': 'gzip'}),
+      );
+      final etag = first.headers['etag']!;
+      final response = await handler(
+        request(
+          '/flutter_bootstrap.js',
+          headers: {'accept-encoding': 'gzip', 'if-none-match': etag},
+        ),
+      );
+      expect(response.statusCode, 304);
+      expect(response.headers['etag'], etag);
+      expect(response.headers['content-encoding'], isNull);
+      expect(response.headers['content-length'], anyOf(isNull, '0'));
+      expect(response.headers['cache-control'], 'no-cache');
+      expect(response.headers['vary'], 'Accept-Encoding');
+      expect(await bodyOf(response), isEmpty);
+    });
+
+    test('If-Modified-Since at the file date is a 304 too', () async {
+      final first = await handler(
+        request('/flutter_bootstrap.js', headers: {'accept-encoding': 'gzip'}),
+      );
+      final response = await handler(
+        request(
+          '/flutter_bootstrap.js',
+          headers: {
+            'accept-encoding': 'gzip',
+            'if-modified-since': first.headers['last-modified']!,
+          },
+        ),
+      );
+      expect(response.statusCode, 304);
+      expect(await bodyOf(response), isEmpty);
+    });
+
+    test('the identity ETag and the sidecar ETag differ (Vary keeps them '
+        'apart; a cache never answers one with the other)', () async {
+      final identity = await handler(request('/flutter_bootstrap.js'));
+      final compressed = await handler(
+        request('/flutter_bootstrap.js', headers: {'accept-encoding': 'gzip'}),
+      );
+      expect(identity.headers['etag'], isNot(compressed.headers['etag']));
+      final cross = await handler(
+        request(
+          '/flutter_bootstrap.js',
+          headers: {
+            'accept-encoding': 'gzip',
+            'if-none-match': identity.headers['etag']!,
+          },
+        ),
+      );
+      expect(cross.statusCode, 200, reason: 'the identity tag is not ours');
+      expect(await bodyOf(cross), sidecarBytes);
+    });
+
+    test('a directory request uses index.html\'s sidecar', () async {
+      final root = webDir.path;
+      final sidecar = File('$root/index.html.gz');
+      final marker = gzip.encode(utf8.encode('<!-- index.html.gz -->'));
+      await sidecar.writeAsBytes(marker);
+      addTearDown(() => sidecar.delete());
+
+      final response = await handler(
+        request('/', headers: {'accept-encoding': 'gzip'}),
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], 'text/html');
+      expect(response.headers['cache-control'], 'no-cache');
+      expect(await bodyOf(response), marker);
+    });
+
+    test('the SPA fallback never picks a sidecar (deep links stay on the '
+        'fly)', () async {
+      final response = await handler(
+        request('/stops/123', headers: {'accept-encoding': 'gzip'}),
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['etag'], isNot(startsWith('"gz-')));
+      expect(gzip.decode(await bodyOf(response)), indexHtml);
+    });
+  });
+
   group('over HTTP', () {
     late HttpServer server;
     late Uri base;

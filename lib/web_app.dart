@@ -1,5 +1,8 @@
-import 'dart:io' show HttpHeaders;
+import 'dart:io'
+    show File, FileSystemEntity, FileSystemEntityType, HttpDate, HttpHeaders;
 
+import 'package:mime/mime.dart' show lookupMimeType;
+import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf_gzip/shelf_gzip.dart' as shelf_gzip;
 import 'package:shelf_static/shelf_static.dart';
@@ -112,6 +115,7 @@ Middleware gzipStatic({int level = 6}) =>
       if (request.method != 'GET' ||
           response.statusCode != 200 ||
           response.headers.containsKey(HttpHeaders.contentRangeHeader) ||
+          response.headers.containsKey(HttpHeaders.contentEncodingHeader) ||
           !acceptsGzip(request)) {
         return response;
       }
@@ -145,8 +149,104 @@ Response _varyOnAcceptEncoding(Response response) {
   );
 }
 
+/// Serves the `.gz` sidecar of a static file, as `precompressDirectory`
+/// writes them (the server's start-up pass, or `bin/precompress.dart`), when
+/// the client accepts gzip: compressed once at level 9 instead of on every
+/// request at level 6, so a cold load of `main.dart.js` costs a file read
+/// rather than ~140 ms of CPU, and ships a little smaller. Only `GET`
+/// without `Range` (a range of the gzip body is not a range of the file;
+/// `HEAD` keeps the identity length as before). A sidecar older than its
+/// file is ignored: a new build copied over old sidecars must never serve
+/// yesterday's `main.dart.js`. Conditional requests get a `304` on the
+/// sidecar's own `ETag` or the file's `Last-Modified`. Everything else falls
+/// through to [inner], which gzips on the fly.
+Handler precompressedStatic(String directory, Handler inner) {
+  final root = p.normalize(p.absolute(directory));
+  return (request) async {
+    if (request.method != 'GET' ||
+        request.headers.containsKey(HttpHeaders.rangeHeader) ||
+        !acceptsGzip(request)) {
+      return inner(request);
+    }
+    final target = _resolveStaticPath(root, request.url.pathSegments);
+    if (target == null) return inner(request);
+    final file = await FileSystemEntity.isDirectory(target)
+        ? File(p.join(target, 'index.html'))
+        : File(target);
+    final sidecar = File('${file.path}.gz');
+    final stats = await Future.wait([file.stat(), sidecar.stat()]);
+    final original = stats[0];
+    final compressed = stats[1];
+    if (original.type != FileSystemEntityType.file ||
+        compressed.type != FileSystemEntityType.file ||
+        compressed.modified.isBefore(original.modified)) {
+      return inner(request);
+    }
+    final lastModified = _toSecondResolution(original.modified.toUtc());
+    final etag =
+        '"gz-${compressed.size}-${compressed.modified.millisecondsSinceEpoch}"';
+    final validators = {
+      HttpHeaders.lastModifiedHeader: HttpDate.format(lastModified),
+      HttpHeaders.etagHeader: etag,
+    };
+    if (_matchesEtag(request.headers[HttpHeaders.ifNoneMatchHeader], etag) ||
+        _notModifiedSince(request, lastModified)) {
+      return Response.notModified(headers: validators);
+    }
+    final contentType = lookupMimeType(file.path);
+    return Response.ok(
+      sidecar.openRead(),
+      headers: {
+        ...validators,
+        if (contentType != null) HttpHeaders.contentTypeHeader: contentType,
+        HttpHeaders.contentLengthHeader: '${compressed.size}',
+        HttpHeaders.contentEncodingHeader: 'gzip',
+      },
+    );
+  };
+}
+
+/// The file under [root] that [segments] name, or null when they escape it
+/// (`..`, an absolute segment) — shelf_static rejects those too, so the
+/// fall-through answers them the same way as before.
+String? _resolveStaticPath(String root, List<String> segments) {
+  if (segments.any((s) => s == '..' || s.contains('/') || s.contains('\\'))) {
+    return null;
+  }
+  final path = p.normalize(p.joinAll([root, ...segments]));
+  if (path != root && !p.isWithin(root, path)) return null;
+  return path;
+}
+
+DateTime _toSecondResolution(DateTime time) =>
+    DateTime.fromMillisecondsSinceEpoch(
+      time.millisecondsSinceEpoch - time.millisecond,
+      isUtc: true,
+    );
+
+bool _matchesEtag(String? ifNoneMatch, String etag) {
+  if (ifNoneMatch == null) return false;
+  return ifNoneMatch
+      .split(',')
+      .map((e) => e.trim())
+      .any((e) => e == '*' || e == etag);
+}
+
+/// `If-Modified-Since` at second resolution, like shelf_static; a malformed
+/// date counts as absent.
+bool _notModifiedSince(Request request, DateTime lastModified) {
+  final DateTime? since;
+  try {
+    since = request.ifModifiedSince;
+  } on FormatException {
+    return false;
+  }
+  return since != null && !lastModified.isAfter(since);
+}
+
 /// The handler for the Flutter web build in [directory]: static files with
-/// `index.html` as the SPA fallback, `Cache-Control` and gzip.
+/// `index.html` as the SPA fallback, `Cache-Control`, precompressed sidecars
+/// and gzip on the fly for the rest.
 ///
 /// `bin/server.dart` and the tests build the pipeline through this function
 /// so what is tested is what runs.
@@ -177,5 +277,5 @@ Handler createWebAppHandler(String directory, {int gzipLevel = 6}) {
   return const Pipeline()
       .addMiddleware(staticCacheControl())
       .addMiddleware(gzipStatic(level: gzipLevel))
-      .addHandler(spaFallback);
+      .addHandler(precompressedStatic(directory, spaFallback));
 }
