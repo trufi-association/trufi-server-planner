@@ -3,6 +3,8 @@ import 'dart:io'
 
 import 'package:mime/mime.dart' show lookupMimeType;
 import 'package:path/path.dart' as p;
+
+import 'precompress.dart' show sameSecond;
 import 'package:shelf/shelf.dart';
 import 'package:shelf_gzip/shelf_gzip.dart' as shelf_gzip;
 import 'package:shelf_static/shelf_static.dart';
@@ -155,11 +157,14 @@ Response _varyOnAcceptEncoding(Response response) {
 /// request at level 6, so a cold load of `main.dart.js` costs a file read
 /// rather than ~140 ms of CPU, and ships a little smaller. Only `GET`
 /// without `Range` (a range of the gzip body is not a range of the file;
-/// `HEAD` keeps the identity length as before). A sidecar older than its
-/// file is ignored: a new build copied over old sidecars must never serve
-/// yesterday's `main.dart.js`. Conditional requests get a `304` on the
-/// sidecar's own `ETag` or the file's `Last-Modified`. Everything else falls
-/// through to [inner], which gzips on the fly.
+/// `HEAD` keeps the identity length as before). A sidecar is used only when
+/// its modification time matches its file's to the second (the start-up
+/// pass stamps it so): a new build copied over old sidecars, with or
+/// without preserved dates, must never serve yesterday's `main.dart.js`.
+/// Conditional requests get a `304` on the sidecar's own `ETag`; without an
+/// `If-None-Match`, on the file's `Last-Modified` (RFC 9110 §13.1.3: the
+/// entity tag decides alone when present). Everything else falls through to
+/// [inner], which gzips on the fly.
 Handler precompressedStatic(String directory, Handler inner) {
   final root = p.normalize(p.absolute(directory));
   return (request) async {
@@ -179,7 +184,7 @@ Handler precompressedStatic(String directory, Handler inner) {
     final compressed = stats[1];
     if (original.type != FileSystemEntityType.file ||
         compressed.type != FileSystemEntityType.file ||
-        compressed.modified.isBefore(original.modified)) {
+        !sameSecond(compressed.modified, original.modified)) {
       return inner(request);
     }
     final lastModified = _toSecondResolution(original.modified.toUtc());
@@ -189,8 +194,11 @@ Handler precompressedStatic(String directory, Handler inner) {
       HttpHeaders.lastModifiedHeader: HttpDate.format(lastModified),
       HttpHeaders.etagHeader: etag,
     };
-    if (_matchesEtag(request.headers[HttpHeaders.ifNoneMatchHeader], etag) ||
-        _notModifiedSince(request, lastModified)) {
+    final ifNoneMatch = request.headers[HttpHeaders.ifNoneMatchHeader];
+    final notModified = ifNoneMatch != null
+        ? _matchesEtag(ifNoneMatch, etag)
+        : _notModifiedSince(request, lastModified);
+    if (notModified) {
       return Response.notModified(headers: validators);
     }
     final contentType = lookupMimeType(file.path);

@@ -59,7 +59,13 @@ Future<void> main() async {
   // copied into web/ followed by a restart is all a deploy needs; set
   // PRECOMPRESS_WEB=0 to serve whatever sidecars are there, or none.
   if (Platform.environment['PRECOMPRESS_WEB'] != '0') {
-    print('Web: ${await precompressDirectory('web')}');
+    try {
+      print('Web: ${await precompressDirectory('web')}');
+    } catch (e) {
+      // A read-only or missing web/ (the CI mounts it :ro) means no
+      // sidecars, never a server that fails to start.
+      stderr.writeln('Web: precompress skipped: $e');
+    }
   }
   final webHandler = createWebAppHandler('web');
 

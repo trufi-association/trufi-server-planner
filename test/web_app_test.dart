@@ -368,7 +368,12 @@ void main() {
       sidecarBytes = gzip.encode(
         utf8.encode('/* served from flutter_bootstrap.js.gz */'),
       );
-      await File('$root/flutter_bootstrap.js.gz').writeAsBytes(sidecarBytes);
+      final sidecar = File('$root/flutter_bootstrap.js.gz');
+      await sidecar.writeAsBytes(sidecarBytes);
+      // As the start-up pass leaves it: the sidecar carries the file's date.
+      await sidecar.setLastModified(
+        await File('$root/flutter_bootstrap.js').lastModified(),
+      );
     });
 
     test(
@@ -421,6 +426,44 @@ void main() {
       // which is exactly the point — the stale gzip never reached the wire.
       expect(response.headers['content-encoding'], isNull);
       expect(body, await original.readAsBytes());
+    });
+
+    test('a sidecar NEWER than its file is ignored too: the dates must match '
+        '(a build redeployed with preserved dates)', () async {
+      final root = webDir.path;
+      final original = File('$root/version.json');
+      final stale = File('$root/version.json.gz');
+      await stale.writeAsBytes(gzip.encode(utf8.encode('{"stale":true}')));
+      await stale.setLastModified(
+        (await original.lastModified()).add(const Duration(hours: 1)),
+      );
+      addTearDown(() => stale.delete());
+
+      final response = await handler(
+        request('/version.json', headers: {'accept-encoding': 'gzip'}),
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['etag'], isNot(startsWith('"gz-')));
+      expect(await bodyOf(response), await original.readAsBytes());
+    });
+
+    test('If-None-Match decides alone: a stranger tag with a matching '
+        'If-Modified-Since is a 200, not a 304', () async {
+      final first = await handler(
+        request('/flutter_bootstrap.js', headers: {'accept-encoding': 'gzip'}),
+      );
+      final response = await handler(
+        request(
+          '/flutter_bootstrap.js',
+          headers: {
+            'accept-encoding': 'gzip',
+            'if-none-match': '"someone-elses-tag"',
+            'if-modified-since': first.headers['last-modified']!,
+          },
+        ),
+      );
+      expect(response.statusCode, 200);
+      expect(await bodyOf(response), sidecarBytes);
     });
 
     test('HEAD and Range requests never use the sidecar', () async {
