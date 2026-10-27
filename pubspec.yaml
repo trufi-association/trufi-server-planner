@@ -10,7 +10,7 @@ dependencies:
   # HTTP server
   shelf: ^1.4.2
   shelf_router: ^1.1.4
-  shelf_static: ^1.1.3
+  shelf_static: ^1.2.0
 
   # GTFS routing (shared with trufi_core_routing)
   trufi_core_planner:
