@@ -71,6 +71,7 @@ void main() {
       expect(response.headers['vary'], 'Accept-Encoding');
       expect(response.headers['content-type'], 'text/javascript');
       expect(response.headers['etag'], isNotNull);
+      expect(response.headers['cache-control'], 'no-cache');
       expect(response.headers['accept-ranges'], isNull);
 
       final body = await bodyOf(response);
@@ -174,6 +175,8 @@ void main() {
       // what matters here is that it is not the size of a gzip body.
       expect(response.headers['content-length'], anyOf(isNull, '0'));
       expect(response.headers['etag'], etag);
+      // A 304 repeats the caching headers of the 200 it stands for.
+      expect(response.headers['cache-control'], 'no-cache');
       expect(response.headers['vary'], 'Accept-Encoding');
       expect(await bodyOf(response), isEmpty);
     });
@@ -236,6 +239,77 @@ void main() {
     });
   });
 
+  group('Cache-Control', () {
+    test('only content-hashed names are immutable', () {
+      const cases = {
+        '': mutableCacheControl,
+        'index.html': mutableCacheControl,
+        'flutter_bootstrap.js': mutableCacheControl,
+        'flutter_service_worker.js': mutableCacheControl,
+        'main.dart.js': mutableCacheControl,
+        'version.json': mutableCacheControl,
+        'icons/Icon-192.png': mutableCacheControl,
+        'canvaskit/canvaskit.wasm': mutableCacheControl,
+        'assets/assets/search/search.json': mutableCacheControl,
+        'assets/fonts/MaterialIcons-Regular.otf': mutableCacheControl,
+        // --web-content-hash output (Flutter 3.50+)
+        'main.dart.1a2b3c4d.js': immutableCacheControl,
+        'main.dart.f215ce97.wasm': immutableCacheControl,
+        'main.dart.1a2b3c4d.js.map': immutableCacheControl,
+        'assets/AssetManifest.bin.1a2b3c4d.json': immutableCacheControl,
+        'assets/FontManifest.1a2b3c4d.json': immutableCacheControl,
+        'assets/NOTICES.1a2b3c4d': immutableCacheControl,
+        'assets/app-0123456789abcdef.css': immutableCacheControl,
+      };
+      for (final entry in cases.entries) {
+        expect(cacheControlFor(entry.key), entry.value, reason: entry.key);
+      }
+    });
+
+    test('index.html and / are no-cache', () async {
+      for (final path in ['/', '/index.html']) {
+        final response = await handler(request(path));
+        expect(response.statusCode, 200, reason: path);
+        expect(response.headers['cache-control'], 'no-cache', reason: path);
+        expect(response.headers['etag'], isNotNull, reason: path);
+      }
+    });
+
+    test('a hashed file is immutable (and still gzipped)', () async {
+      final response = await handler(request(
+        '/main.dart.1a2b3c4d.js',
+        headers: {'accept-encoding': 'gzip'},
+      ));
+      expect(response.statusCode, 200);
+      expect(response.headers['cache-control'], immutableCacheControl);
+      expect(response.headers['content-encoding'], 'gzip');
+    });
+
+    test('the SPA fallback serves index.html as no-cache, gzipped', () async {
+      final response = await handler(
+        request('/routes', headers: {'accept-encoding': 'gzip'}),
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], 'text/html');
+      expect(response.headers['cache-control'], 'no-cache');
+      expect(response.headers['content-encoding'], 'gzip');
+      expect(gzip.decode(await bodyOf(response)), indexHtml);
+    });
+
+    test('a missing asset is a genuine 404, no-cache', () async {
+      final response = await handler(request('/assets/missing.json'));
+      expect(response.statusCode, 404);
+      expect(response.headers['cache-control'], 'no-cache');
+    });
+
+    test('an explicit Cache-Control is left alone', () async {
+      Response stub(Request _) =>
+          Response.ok('x', headers: {'cache-control': 'max-age=5'});
+      final response = await staticCacheControl()(stub)(request('/x'));
+      expect(response.headers['cache-control'], 'max-age=5');
+    });
+  });
+
   group('over HTTP', () {
     late HttpServer server;
     late Uri base;
@@ -275,6 +349,7 @@ void main() {
       expect(res.statusCode, 200);
       expect(res.headers.value('content-encoding'), 'gzip');
       expect(res.headers.value('vary'), 'Accept-Encoding');
+      expect(res.headers.value('cache-control'), 'no-cache');
       expect(res.headers.contentLength, bytes.length);
       expect(bytes.length, lessThan(mainJs.length ~/ 5));
       expect(gzip.decode(bytes), mainJs);
