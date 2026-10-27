@@ -29,24 +29,44 @@ const immutableCacheControl = 'public, max-age=31536000, immutable';
 /// writes it (`main.dart.1a2b3c4d.js`, `AssetManifest.bin.1a2b3c4d.json`,
 /// `NOTICES.1a2b3c4d`, `main.dart.1a2b3c4d.js.map`) or the common
 /// `app-1a2b3c4d.css` form.
-final _hashedFileName = RegExp(r'[.-][0-9a-f]{8,}(\.[A-Za-z0-9]+)*$');
+///
+/// The run must contain a letter: a hash is hexadecimal, while a run of
+/// digits alone is more likely a date stamp (`logo-20261027.png`), which
+/// changes under the same name.
+final _hashedFileName = RegExp(
+  r'[.-](?=[0-9a-f]*[a-f])[0-9a-f]{8,}(\.[A-Za-z0-9]+)*$',
+);
 
-/// The `Cache-Control` value for the static file at [path].
-String cacheControlFor(String path) =>
-    _hashedFileName.hasMatch(path) ? immutableCacheControl : mutableCacheControl;
+/// The `Cache-Control` value for the static file at [path] when it was
+/// actually served ([statusCode] 200, 206 or 304). Anything else — a 404, or
+/// the SPA fallback answering for a deep link that happens to look hashed —
+/// is `no-cache`: a year-long `immutable` on a 404 would make a transient
+/// rollout gap permanent.
+String cacheControlFor(String path, {int statusCode = 200}) =>
+    _servedStatuses.contains(statusCode) && _hashedFileName.hasMatch(path)
+    ? immutableCacheControl
+    : mutableCacheControl;
+
+const _servedStatuses = {200, 206, 304};
 
 /// Adds `Cache-Control` (see [cacheControlFor]) to every response that does
 /// not already carry one, 304s and 404s included: a 304 must repeat the
 /// caching headers of the 200 it stands for, and an uncontrolled 404 is
 /// heuristically cacheable too.
-Middleware staticCacheControl() => (inner) => (request) async {
+Middleware staticCacheControl() =>
+    (inner) => (request) async {
       final response = await inner(request);
       if (response.headers.containsKey(HttpHeaders.cacheControlHeader)) {
         return response;
       }
-      return response.change(headers: {
-        HttpHeaders.cacheControlHeader: cacheControlFor(request.url.path),
-      });
+      return response.change(
+        headers: {
+          HttpHeaders.cacheControlHeader: cacheControlFor(
+            request.url.path,
+            statusCode: response.statusCode,
+          ),
+        },
+      );
     };
 
 /// Whether [request] accepts the `gzip` content coding, honouring `q`
@@ -86,7 +106,8 @@ bool acceptsGzip(Request request) {
 /// default 4 for twice the CPU (139 ms vs 70 ms for 5 MB on an M-series Mac).
 /// The transfer is what the users on slow links pay for, the CPU is paid once
 /// per cold load on a server that otherwise idles, so 6 it is.
-Middleware gzipStatic({int level = 6}) => (inner) => (request) async {
+Middleware gzipStatic({int level = 6}) =>
+    (inner) => (request) async {
       final response = _varyOnAcceptEncoding(await inner(request));
       if (request.method != 'GET' ||
           response.statusCode != 200 ||
@@ -108,13 +129,20 @@ Middleware gzipStatic({int level = 6}) => (inner) => (request) async {
 Response _varyOnAcceptEncoding(Response response) {
   final vary = response.headers[HttpHeaders.varyHeader];
   if (vary != null &&
-      vary.toLowerCase().split(',').map((e) => e.trim()).contains('accept-encoding')) {
+      vary
+          .toLowerCase()
+          .split(',')
+          .map((e) => e.trim())
+          .contains('accept-encoding')) {
     return response;
   }
-  return response.change(headers: {
-    HttpHeaders.varyHeader:
-        vary == null ? 'Accept-Encoding' : '$vary, Accept-Encoding',
-  });
+  return response.change(
+    headers: {
+      HttpHeaders.varyHeader: vary == null
+          ? 'Accept-Encoding'
+          : '$vary, Accept-Encoding',
+    },
+  );
 }
 
 /// The handler for the Flutter web build in [directory]: static files with
@@ -131,12 +159,19 @@ Handler createWebAppHandler(String directory, {int gzipLevel = 6}) {
   Future<Response> spaFallback(Request req) async {
     final res = await files(req);
     if (res.statusCode != 404 || req.url.path.contains('.')) return res;
-    return files(Request(
-      'GET',
-      req.requestedUri.replace(path: '/'),
-      headers: req.headers,
-      context: req.context,
-    ));
+    final index = await files(
+      Request(
+        'GET',
+        req.requestedUri.replace(path: '/'),
+        headers: req.headers,
+        context: req.context,
+      ),
+    );
+    // index.html stands in for whatever the deep link looked like, so its
+    // caching policy is index.html's, never the link's.
+    return index.change(
+      headers: {HttpHeaders.cacheControlHeader: mutableCacheControl},
+    );
   }
 
   return const Pipeline()

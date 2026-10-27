@@ -20,8 +20,7 @@ void main() {
     String path, {
     String method = 'GET',
     Map<String, String>? headers,
-  }) =>
-      Request(method, Uri.parse('http://localhost$path'), headers: headers);
+  }) => Request(method, Uri.parse('http://localhost$path'), headers: headers);
 
   Future<List<int>> bodyOf(Response response) async =>
       (await response.read().toList()).expand((chunk) => chunk).toList();
@@ -46,14 +45,17 @@ void main() {
       '"package_name":"trufi"}',
     );
     // Pseudo-random bytes behind a .png name: an already-compressed type.
-    await File('$root/favicon.png')
-        .writeAsBytes(List.generate(4096, (i) => (i * 7919 + 13) & 0xff));
+    await File(
+      '$root/favicon.png',
+    ).writeAsBytes(List.generate(4096, (i) => (i * 7919 + 13) & 0xff));
     await Directory('$root/assets/assets/search').create(recursive: true);
     await File('$root/assets/assets/search/search.json').writeAsString(
-      jsonEncode(List.generate(
-        500,
-        (i) => {'name': 'Parada $i', 'lat': -17.39 + i / 1e3, 'lon': -66.15},
-      )),
+      jsonEncode(
+        List.generate(
+          500,
+          (i) => {'name': 'Parada $i', 'lat': -17.39 + i / 1e3, 'lon': -66.15},
+        ),
+      ),
     );
     handler = createWebAppHandler(root);
   });
@@ -62,10 +64,12 @@ void main() {
 
   group('gzip', () {
     test('GET with Accept-Encoding: gzip gets a smaller gzip body', () async {
-      final response = await handler(request(
-        '/main.dart.js',
-        headers: {'accept-encoding': 'gzip, deflate, br'},
-      ));
+      final response = await handler(
+        request(
+          '/main.dart.js',
+          headers: {'accept-encoding': 'gzip, deflate, br'},
+        ),
+      );
       expect(response.statusCode, 200);
       expect(response.headers['content-encoding'], 'gzip');
       expect(response.headers['vary'], 'Accept-Encoding');
@@ -144,16 +148,18 @@ void main() {
     });
 
     test('JSON assets are compressed', () async {
-      final response = await handler(request(
-        '/assets/assets/search/search.json',
-        headers: {'accept-encoding': 'gzip'},
-      ));
+      final response = await handler(
+        request(
+          '/assets/assets/search/search.json',
+          headers: {'accept-encoding': 'gzip'},
+        ),
+      );
       expect(response.statusCode, 200);
       expect(response.headers['content-type'], 'application/json');
       expect(response.headers['content-encoding'], 'gzip');
-      final original =
-          await File('${webDir.path}/assets/assets/search/search.json')
-              .readAsBytes();
+      final original = await File(
+        '${webDir.path}/assets/assets/search/search.json',
+      ).readAsBytes();
       final body = await bodyOf(response);
       expect(body.length, lessThan(original.length ~/ 4));
       expect(gzip.decode(body), original);
@@ -164,10 +170,12 @@ void main() {
         request('/main.dart.js', headers: {'accept-encoding': 'gzip'}),
       );
       final etag = first.headers['etag']!;
-      final response = await handler(request(
-        '/main.dart.js',
-        headers: {'accept-encoding': 'gzip', 'if-none-match': etag},
-      ));
+      final response = await handler(
+        request(
+          '/main.dart.js',
+          headers: {'accept-encoding': 'gzip', 'if-none-match': etag},
+        ),
+      );
       expect(response.statusCode, 304);
       expect(response.headers['content-encoding'], isNull);
       // shelf stamps `content-length: 0` on any body-less response whose
@@ -183,23 +191,27 @@ void main() {
 
     test('a 304 by If-Modified-Since is not re-encoded either', () async {
       final first = await handler(request('/main.dart.js'));
-      final response = await handler(request(
-        '/main.dart.js',
-        headers: {
-          'accept-encoding': 'gzip',
-          'if-modified-since': first.headers['last-modified']!,
-        },
-      ));
+      final response = await handler(
+        request(
+          '/main.dart.js',
+          headers: {
+            'accept-encoding': 'gzip',
+            'if-modified-since': first.headers['last-modified']!,
+          },
+        ),
+      );
       expect(response.statusCode, 304);
       expect(response.headers['content-encoding'], isNull);
       expect(response.headers['content-length'], anyOf(isNull, '0'));
     });
 
     test('range requests are answered with identity bytes', () async {
-      final response = await handler(request(
-        '/main.dart.js',
-        headers: {'accept-encoding': 'gzip', 'range': 'bytes=0-99'},
-      ));
+      final response = await handler(
+        request(
+          '/main.dart.js',
+          headers: {'accept-encoding': 'gzip', 'range': 'bytes=0-99'},
+        ),
+      );
       expect(response.statusCode, 206);
       expect(response.headers['content-range'], 'bytes 0-99/${mainJs.length}');
       expect(response.headers['content-encoding'], isNull);
@@ -208,11 +220,13 @@ void main() {
     });
 
     test('HEAD keeps the identity Content-Length and sends no body', () async {
-      final response = await handler(request(
-        '/main.dart.js',
-        method: 'HEAD',
-        headers: {'accept-encoding': 'gzip'},
-      ));
+      final response = await handler(
+        request(
+          '/main.dart.js',
+          method: 'HEAD',
+          headers: {'accept-encoding': 'gzip'},
+        ),
+      );
       expect(response.statusCode, 200);
       expect(response.headers['content-encoding'], isNull);
       expect(response.headers['content-length'], '${mainJs.length}');
@@ -221,19 +235,17 @@ void main() {
 
     test('Vary is merged with an existing value', () async {
       Response stub(Request _) => Response.ok(
-            'x' * 2048,
-            headers: {'vary': 'Origin', 'content-type': 'text/plain'},
-          );
+        'x' * 2048,
+        headers: {'vary': 'Origin', 'content-type': 'text/plain'},
+      );
       final response = await gzipStatic()(stub)(
         request('/x', headers: {'accept-encoding': 'gzip'}),
       );
       expect(response.headers['vary'], 'Origin, Accept-Encoding');
       expect(response.headers['content-encoding'], 'gzip');
 
-      Response already(Request _) => Response.ok(
-            'x' * 2048,
-            headers: {'vary': 'accept-encoding'},
-          );
+      Response already(Request _) =>
+          Response.ok('x' * 2048, headers: {'vary': 'accept-encoding'});
       final kept = await gzipStatic()(already)(request('/x'));
       expect(kept.headers['vary'], 'accept-encoding');
     });
@@ -266,6 +278,37 @@ void main() {
       }
     });
 
+    test(
+      'a 404 for a hashed-looking name is no-cache, not immutable',
+      () async {
+        final response = await handler(
+          Request('GET', Uri.parse('http://x/assets/foo-0123456789ab.png')),
+        );
+        expect(response.statusCode, 404);
+        expect(response.headers['cache-control'], 'no-cache');
+      },
+    );
+
+    test(
+      'the SPA fallback for a hashed-looking deep link is no-cache',
+      () async {
+        final response = await handler(
+          Request('GET', Uri.parse('http://x/stops/stop-13760954848')),
+        );
+        expect(response.statusCode, 200);
+        expect(response.headers['cache-control'], 'no-cache');
+      },
+    );
+
+    test('a run of digits alone (date stamp) is not a content hash', () {
+      expect(cacheControlFor('logo-20261027.png'), mutableCacheControl);
+      expect(cacheControlFor('gtfs-20260916.zip'), mutableCacheControl);
+      expect(
+        cacheControlFor('main.dart.1a2b3c4d.js', statusCode: 404),
+        mutableCacheControl,
+      );
+    });
+
     test('index.html and / are no-cache', () async {
       for (final path in ['/', '/index.html']) {
         final response = await handler(request(path));
@@ -276,10 +319,9 @@ void main() {
     });
 
     test('a hashed file is immutable (and still gzipped)', () async {
-      final response = await handler(request(
-        '/main.dart.1a2b3c4d.js',
-        headers: {'accept-encoding': 'gzip'},
-      ));
+      final response = await handler(
+        request('/main.dart.1a2b3c4d.js', headers: {'accept-encoding': 'gzip'}),
+      );
       expect(response.statusCode, 200);
       expect(response.headers['cache-control'], immutableCacheControl);
       expect(response.headers['content-encoding'], 'gzip');
@@ -343,17 +385,22 @@ void main() {
       }
     }
 
-    test('the wire carries gzip bytes with a matching Content-Length',
-        () async {
-      final (res, bytes) = await fetch('/main.dart.js', acceptEncoding: 'gzip');
-      expect(res.statusCode, 200);
-      expect(res.headers.value('content-encoding'), 'gzip');
-      expect(res.headers.value('vary'), 'Accept-Encoding');
-      expect(res.headers.value('cache-control'), 'no-cache');
-      expect(res.headers.contentLength, bytes.length);
-      expect(bytes.length, lessThan(mainJs.length ~/ 5));
-      expect(gzip.decode(bytes), mainJs);
-    });
+    test(
+      'the wire carries gzip bytes with a matching Content-Length',
+      () async {
+        final (res, bytes) = await fetch(
+          '/main.dart.js',
+          acceptEncoding: 'gzip',
+        );
+        expect(res.statusCode, 200);
+        expect(res.headers.value('content-encoding'), 'gzip');
+        expect(res.headers.value('vary'), 'Accept-Encoding');
+        expect(res.headers.value('cache-control'), 'no-cache');
+        expect(res.headers.contentLength, bytes.length);
+        expect(bytes.length, lessThan(mainJs.length ~/ 5));
+        expect(gzip.decode(bytes), mainJs);
+      },
+    );
 
     test('the wire carries identity bytes without Accept-Encoding', () async {
       final (res, bytes) = await fetch('/main.dart.js');
@@ -363,13 +410,15 @@ void main() {
       expect(bytes, mainJs);
     });
 
-    test('a transparent client (dart:io default) sees the original bytes',
-        () async {
-      // HttpClient sends Accept-Encoding: gzip and decompresses by itself.
-      final (res, bytes) = await fetch('/main.dart.js', autoUncompress: true);
-      expect(res.statusCode, 200);
-      expect(bytes, mainJs);
-    });
+    test(
+      'a transparent client (dart:io default) sees the original bytes',
+      () async {
+        // HttpClient sends Accept-Encoding: gzip and decompresses by itself.
+        final (res, bytes) = await fetch('/main.dart.js', autoUncompress: true);
+        expect(res.statusCode, 200);
+        expect(bytes, mainJs);
+      },
+    );
 
     test('a 304 on the wire has no body and no Content-Encoding', () async {
       final (first, _) = await fetch('/main.dart.js');
