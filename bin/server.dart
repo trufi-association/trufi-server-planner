@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
-import 'package:shelf_static/shelf_static.dart';
 import 'package:trufi_core_planner/trufi_core_planner.dart';
 
 import 'package:trufi_server_planner/state.dart';
 import 'package:trufi_server_planner/middleware.dart';
+import 'package:trufi_server_planner/web_app.dart';
 import 'package:trufi_server_planner/handlers/health.dart';
 import 'package:trufi_server_planner/handlers/stops.dart';
 import 'package:trufi_server_planner/handlers/routes.dart';
@@ -53,25 +53,8 @@ Future<void> main() async {
     ..get('/api/docs', swaggerUiHandler)
     ..get('/api/openapi.json', openApiSpecHandler);
 
-  // Static file handler for Flutter web app
-  final webHandler = createStaticHandler(
-    'web',
-    defaultDocument: 'index.html',
-  );
-
-  // SPA fallback: when a path without a file extension 404s, serve
-  // index.html so the Flutter client-side router can resolve deep
-  // links (e.g. /routes, /stops/123) on hard reload.
-  Future<Response> staticHandler(Request req) async {
-    final res = await webHandler(req);
-    if (res.statusCode != 404 || req.url.path.contains('.')) return res;
-    return webHandler(Request(
-      'GET',
-      req.requestedUri.replace(path: '/'),
-      headers: req.headers,
-      context: req.context,
-    ));
-  }
+  // Flutter web app: static files + SPA fallback + Cache-Control + gzip
+  final webHandler = createWebAppHandler('web');
 
   // Cascade: API first, then static files
   final handler = Pipeline()
@@ -80,7 +63,7 @@ Future<void> main() async {
       .addHandler(
         Cascade()
             .add(apiRouter.call)
-            .add(staticHandler)
+            .add(webHandler)
             .handler,
       );
 
