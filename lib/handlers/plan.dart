@@ -78,7 +78,11 @@ int readIntField(
 }) {
   final raw = json[key];
   if (raw == null) return fallback;
-  if (raw is! num || !raw.isFinite || raw != raw.truncate()) {
+  // `% 1`, not `truncate()`: truncate() saturates at 2^63-1 on the VM, so
+  // 1e19 would read as "not an integer" while 9223372036854775808 (the
+  // same value, decoded as a double) would pass. With `% 1` both are
+  // integers and clamp to the cap below.
+  if (raw is! num || !raw.isFinite || raw % 1 != 0) {
     throw BadPlanRequest('$key must be an integer');
   }
   final value = raw.toInt();

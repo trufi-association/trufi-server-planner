@@ -233,6 +233,29 @@ void main() {
       );
       expect(json['effectiveParameters']['maxTransfers'], maxTransfersCap);
     });
+
+    test('an integral value beyond int64 is an integer: clamped, not '
+        'rejected, however it is spelled', () async {
+      for (final literal in ['1e19', '9223372036854775808']) {
+        final (status, json) = await post(
+          '{"from":{"lat":-17.420536,"lon":-66.143176},'
+          '"to":{"lat":-17.384842,"lon":-66.147902},'
+          '"maxStopCandidates":$literal}',
+        );
+        expect(status, 200, reason: literal);
+        expect(
+          json['effectiveParameters']['maxStopCandidates'],
+          maxStopCandidatesCap,
+          reason: literal,
+        );
+      }
+      final (status, json) = await post(
+        '{"from":{"lat":-17.420536,"lon":-66.143176},'
+        '"to":{"lat":-17.384842,"lon":-66.147902},"maxStopCandidates":-1e19}',
+      );
+      expect(status, 400);
+      expect(json['error'], 'maxStopCandidates must be >= 1');
+    });
   });
 
   group('invalid', () {
