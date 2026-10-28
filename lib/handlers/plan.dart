@@ -47,6 +47,24 @@ class BadPlanRequest implements Exception {
   String toString() => message;
 }
 
+/// Reads an optional numeric field: absent or `null` → [fallback]; not a
+/// finite JSON number (string, boolean, `1e400`) → [BadPlanRequest]. The
+/// caller converts and clamps, so the #4 rule for `maxResults` and
+/// `maxWalkDistance` — out of range means the nearest bound, never a
+/// rejection — stays as it was.
+num readNumField(
+  Map<String, dynamic> json,
+  String key, {
+  required num fallback,
+}) {
+  final raw = json[key];
+  if (raw == null) return fallback;
+  if (raw is! num || !raw.isFinite) {
+    throw BadPlanRequest('$key must be a number');
+  }
+  return raw;
+}
+
 /// Reads an optional integer field: absent or `null` → [fallback]; not an
 /// integer (string, boolean, fraction) or below [min] → [BadPlanRequest];
 /// above [max] → [max]. An integral double (`150.0`) counts as an integer:
@@ -98,18 +116,24 @@ Future<Response> planHandler(Request request) async {
       );
     }
 
+    // Fields are validated in the order they appear in the OpenAPI spec,
+    // after the coordinates; the first offending one is the one reported.
+    //
     // Honor the client's requested result count and walk radius, bounded
-    // to keep responses small and searches local. Older clients that
-    // don't send them get the defaults.
-    final maxResults = ((json['maxResults'] as num?)?.toInt() ?? 20).clamp(
-      1,
-      20,
-    );
-    final maxWalkDistance =
-        ((json['maxWalkDistance'] as num?)?.toDouble() ?? 800.0).clamp(
-      100.0,
-      2000.0,
-    );
+    // on both sides to keep responses small and searches local (#4: a
+    // value below the floor is raised to it, not rejected). Older clients
+    // that don't send them get the defaults; a non-numeric value is a 400
+    // like the other knobs, not a 500 from a failed cast.
+    final maxResults = readNumField(
+      json,
+      'maxResults',
+      fallback: 20,
+    ).toInt().clamp(1, 20);
+    final maxWalkDistance = readNumField(
+      json,
+      'maxWalkDistance',
+      fallback: 800.0,
+    ).toDouble().clamp(100.0, 2000.0);
 
     // The pool of boarding/alighting stops and the transfer limit, as sent
     // by trufi-core's RemotePlannerClient (`TrufiPlannerConfig.remote`).

@@ -201,6 +201,26 @@ void main() {
       });
     });
 
+    test(
+      'maxResults and maxWalkDistance clamp on both sides (#4 rule kept)',
+      () async {
+        final (_, low) = await plan(docsExample, {
+          'maxResults': 0,
+          'maxWalkDistance': 5,
+        });
+        final (_, high) = await plan(docsExample, {
+          'maxResults': 50,
+          'maxWalkDistance': 5000,
+        });
+        final (_, fraction) = await plan(docsExample, {'maxResults': 2.7});
+        expect(low['effectiveParameters']['maxResults'], 1);
+        expect(low['effectiveParameters']['maxWalkDistance'], 100.0);
+        expect(high['effectiveParameters']['maxResults'], 20);
+        expect(high['effectiveParameters']['maxWalkDistance'], 2000.0);
+        expect(fraction['effectiveParameters']['maxResults'], 2);
+      },
+    );
+
     test('the cap itself is honoured as sent', () async {
       final (status, json) = await plan(docsExample, {
         'maxStopCandidates': maxStopCandidatesCap,
@@ -233,6 +253,16 @@ void main() {
         {'value': 1},
       ],
       'directsHideTransfers': ['false', 'true', 0, 1, 1.0],
+      'maxResults': [
+        '20',
+        true,
+        [20],
+      ],
+      'maxWalkDistance': [
+        '800',
+        false,
+        {'m': 800},
+      ],
     };
 
     for (final MapEntry(key: field, value: values) in cases.entries) {
@@ -257,6 +287,15 @@ void main() {
       expect(json['error'], 'maxTransfers must be an integer');
     });
 
+    test('1e400 is not a number for the clamped fields either', () async {
+      final (status, json) = await post(
+        '{"from":{"lat":-17.420536,"lon":-66.143176},'
+        '"to":{"lat":-17.384842,"lon":-66.147902},"maxWalkDistance":1e400}',
+      );
+      expect(status, 400);
+      expect(json['error'], 'maxWalkDistance must be a number');
+    });
+
     test('the message says what was expected', () async {
       final (_, notInt) = await plan(docsExample, {'maxStopCandidates': '5'});
       final (_, tooLow) = await plan(docsExample, {'maxStopCandidates': 0});
@@ -264,10 +303,16 @@ void main() {
       final (_, notBool) = await plan(docsExample, {
         'directsHideTransfers': 'yes',
       });
+      final (_, notNum) = await plan(docsExample, {'maxResults': '20'});
+      final (_, notNumWalk) = await plan(docsExample, {
+        'maxWalkDistance': '800',
+      });
       expect(notInt['error'], 'maxStopCandidates must be an integer');
       expect(tooLow['error'], 'maxStopCandidates must be >= 1');
       expect(negative['error'], 'maxTransfers must be >= 0');
       expect(notBool['error'], 'directsHideTransfers must be a boolean');
+      expect(notNum['error'], 'maxResults must be a number');
+      expect(notNumWalk['error'], 'maxWalkDistance must be a number');
     });
 
     test('missing coordinates are still a 400', () async {

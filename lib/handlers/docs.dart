@@ -223,14 +223,16 @@ const _openApiSpec = {
                   'maxResults': {
                     'type': 'integer',
                     'description':
-                        'Maximum paths to return (1-20). Defaults to 20.',
+                        'Maximum paths to return (1-20; values outside '
+                        'the range are clamped). Defaults to 20.',
                     'example': 20,
                   },
                   'maxWalkDistance': {
                     'type': 'number',
                     'description':
                         'Walk radius to board/alight, in meters '
-                        '(100-2000). Defaults to 800.',
+                        '(100-2000; values outside the range are '
+                        'clamped). Defaults to 800.',
                     'example': 800,
                   },
                   'maxStopCandidates': {
@@ -274,9 +276,13 @@ const _openApiSpec = {
           },
           '400': {
             'description':
-                'Missing from/to coordinates, or a knob that is not an '
-                'integer/boolean or is below its floor '
-                '({"error": "maxTransfers must be >= 0"}).',
+                'Missing from/to coordinates; a field of the wrong type '
+                '(maxResults/maxWalkDistance not a number, '
+                'maxStopCandidates/maxTransfers not an integer, '
+                'directsHideTransfers not a boolean); or '
+                'maxStopCandidates/maxTransfers below the floor. The '
+                'first offending field, in the order above, is reported: '
+                '{"error": "maxTransfers must be >= 0"}.',
           },
         },
       },
