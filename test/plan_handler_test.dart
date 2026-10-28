@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:test/test.dart';
 import 'package:trufi_core_planner/trufi_core_planner.dart';
+import 'package:trufi_server_planner/handlers/docs.dart';
 import 'package:trufi_server_planner/handlers/plan.dart';
 import 'package:trufi_server_planner/state.dart';
 
@@ -13,7 +14,9 @@ void main() {
   // Two pairs of the example feed whose answer depends on the knobs
   // (probed on trufi_core_planner v5.27.0): [docsExample] has six direct
   // lines with the default pool of 150 stops, twelve with 600 and none
-  // with 1; [northEast] has no direct line and fifteen one-transfer paths.
+  // with 1; [northEast] has no direct line and fifteen one-transfer paths;
+  // [farWest] has nothing with 0 or 1 transfers and twenty 2-transfer
+  // paths (found by the fresh review of PR #10).
   const docsExample = {
     'from': {'lat': -17.420536, 'lon': -66.143176},
     'to': {'lat': -17.384842, 'lon': -66.147902},
@@ -21,6 +24,10 @@ void main() {
   const northEast = {
     'from': {'lat': -17.3600, 'lon': -66.1700},
     'to': {'lat': -17.4100, 'lon': -66.1300},
+  };
+  const farWest = {
+    'from': {'lat': -17.535196, 'lon': -66.3354927},
+    'to': {'lat': -17.4013699, 'lon': -66.0613446},
   };
   const defaults = {
     'maxResults': 20,
@@ -141,6 +148,24 @@ void main() {
       expect(direct['effectiveParameters']['maxTransfers'], 0);
       expect(direct['success'], false);
       expect(lines(direct), isEmpty);
+    });
+
+    test('maxTransfers 2 reaches a pair that has no 0/1-transfer path, '
+        'and 9 is the planner at the cap', () async {
+      final (_, one) = await plan(farWest);
+      final (_, two) = await plan(farWest, {'maxTransfers': 2});
+      final (_, atCap) = await plan(farWest, {'maxTransfers': maxTransfersCap});
+      final (_, nine) = await plan(farWest, {'maxTransfers': 9});
+
+      expect(one['success'], false);
+      expect(two['success'], true);
+      expect(
+        (two['paths'] as List).map((p) => p['transfers']),
+        everyElement(2),
+      );
+      expect(nine['effectiveParameters']['maxTransfers'], maxTransfersCap);
+      expect(lines(nine), lines(atCap));
+      expect(lines(nine), isNotEmpty);
     });
 
     test('values inside the range are honoured as sent', () async {
@@ -363,15 +388,80 @@ void main() {
       expect(notNumWalk['error'], 'maxWalkDistance must be a number');
     });
 
-    test('missing coordinates are still a 400', () async {
+    test(
+      'several invalid fields: the first in reading order is reported',
+      () async {
+        final (_, knobs) = await plan(docsExample, {
+          'maxTransfers': -1,
+          'maxStopCandidates': 0,
+        });
+        final (_, clamped) = await plan(docsExample, {
+          'maxStopCandidates': 0,
+          'maxResults': '20',
+        });
+        expect(knobs['error'], 'maxStopCandidates must be >= 1');
+        expect(clamped['error'], 'maxResults must be a number');
+      },
+    );
+
+    test('missing coordinates win over an invalid knob', () async {
       final (status, json) = await post(
         jsonEncode({
           'from': {'lat': -17.3935},
-          'maxTransfers': 2,
+          'maxTransfers': -1,
         }),
       );
       expect(status, 400);
       expect(json['error'], 'Missing from/to coordinates');
     });
+  });
+
+  group('openapi', () {
+    test(
+      '/api/openapi.json documents the knobs, the caps and both responses',
+      () async {
+        final response = openApiSpecHandler(
+          Request('GET', Uri.parse('http://localhost/api/openapi.json')),
+        );
+        expect(response.statusCode, 200);
+        final spec =
+            jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+        final post = spec['paths']['/plan']['post'] as Map<String, dynamic>;
+        final properties =
+            post['requestBody']['content']['application/json']['schema']['properties']
+                as Map<String, dynamic>;
+        expect(
+          properties.keys,
+          containsAll([
+            'from',
+            'to',
+            'maxResults',
+            'maxWalkDistance',
+            'maxStopCandidates',
+            'maxTransfers',
+            'directsHideTransfers',
+          ]),
+        );
+        expect(
+          properties['maxStopCandidates']['description'],
+          contains('1-$maxStopCandidatesCap'),
+        );
+        expect(
+          properties['maxTransfers']['description'],
+          contains('0-$maxTransfersCap'),
+        );
+        expect(
+          properties['directsHideTransfers']['description'],
+          contains('ignoredParameters'),
+        );
+        final responses = post['responses'] as Map<String, dynamic>;
+        expect(responses.keys, containsAll(['200', '400']));
+        expect(
+          responses['200']['description'],
+          allOf(contains('effectiveParameters'), contains('ignoredParameters')),
+        );
+        expect(responses['400']['description'], contains('maxResults'));
+      },
+    );
   });
 }
