@@ -552,6 +552,12 @@ void main() {
       final sidecar = File('$root/index.html.gz');
       final marker = gzip.encode(utf8.encode('<!-- index.html.gz -->'));
       await sidecar.writeAsBytes(marker);
+      // A sidecar counts only when it carries its source's mtime (to the
+      // second); index.html was written by the global setUpAll, maybe a
+      // second or more ago.
+      await sidecar.setLastModified(
+        await File('$root/index.html').lastModified(),
+      );
       addTearDown(() => sidecar.delete());
 
       final response = await handler(

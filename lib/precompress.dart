@@ -86,8 +86,14 @@ Future<PrecompressSummary> precompressDirectory(
   if (!await root.exists()) return summary;
   final codec = GZipCodec(level: level);
   // Snapshot first: the pass creates and deletes entries while it runs.
+  // An unreadable subdirectory must not void the whole pass: it is counted
+  // as a failure and the readable files still get their sidecars.
   final entries = await root
       .list(recursive: true, followLinks: false)
+      .handleError((Object error) {
+        summary.failed++;
+        stderr.writeln('precompress: $error');
+      }, test: (error) => error is FileSystemException)
       .where((entity) => entity is File)
       .cast<File>()
       .toList();

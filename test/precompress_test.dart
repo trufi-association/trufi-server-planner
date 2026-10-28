@@ -135,7 +135,11 @@ void main() {
   });
 
   test('a directory that refuses the write is reported, not thrown', () async {
-    if (Platform.isWindows || Platform.environment['USER'] == 'root') return;
+    if (Platform.isWindows) return;
+    // root ignores file modes (chmod 555 does not stop it): skip as root,
+    // whatever USER says (containers often leave it empty).
+    final uid = await Process.run('id', ['-u']);
+    if ((uid.stdout as String).trim() == '0') return;
     final locked = Directory('$root/locked');
     await locked.create();
     await File('${locked.path}/app.js').writeAsBytes(text(300, 'locked'));
