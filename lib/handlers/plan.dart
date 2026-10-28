@@ -162,10 +162,22 @@ Future<Response> planHandler(Request request) async {
     // planner pinned in pubspec.yaml (trufi_core_planner v5.27.0) has no
     // such parameter — its rule is hardwired to "a direct line hides the
     // one-transfer options". The knob lands with trufi-core#1043; once the
-    // pin reaches a release that has it, pass the parsed value to
-    // `findRoutes` and report it below instead of the constant.
-    readBoolField(json, 'directsHideTransfers', fallback: true);
+    // pin reaches a release that has it, pass the requested value to
+    // `findRoutes`, report it instead of the constant, and the ignored
+    // list below empties itself.
+    final requestedDirectsHideTransfers = readBoolField(
+      json,
+      'directsHideTransfers',
+      fallback: true,
+    );
     const directsHideTransfers = true;
+    // Fields the client sent that the pinned planner cannot honour, named
+    // explicitly: a client that sent `false` and reads `true` should not
+    // have to infer the gap from the itineraries.
+    final ignoredParameters = [
+      if (requestedDirectsHideTransfers != directsHideTransfers)
+        'directsHideTransfers',
+    ];
 
     final paths = routingService.findRoutes(
       origin: LatLng(fromLat, fromLon),
@@ -196,6 +208,8 @@ Future<Response> planHandler(Request request) async {
           'error': 'No routes found',
           'paths': null,
           'effectiveParameters': effectiveParameters,
+          if (ignoredParameters.isNotEmpty)
+            'ignoredParameters': ignoredParameters,
         }),
         headers: {'Content-Type': 'application/json'},
       );
@@ -207,6 +221,8 @@ Future<Response> planHandler(Request request) async {
         'paths': paths.map((p) => p.toJson()).toList(),
         'count': paths.length,
         'effectiveParameters': effectiveParameters,
+        if (ignoredParameters.isNotEmpty)
+          'ignoredParameters': ignoredParameters,
       }),
       headers: {'Content-Type': 'application/json'},
     );

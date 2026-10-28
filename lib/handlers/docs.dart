@@ -259,7 +259,8 @@ const _openApiSpec = {
                         'options. Accepted and validated; the pinned '
                         'planner (trufi_core_planner v5.27.0) does not '
                         'expose the knob yet, so the search always runs '
-                        'with true - see effectiveParameters.',
+                        'with true; sending false is reported in '
+                        'ignoredParameters.',
                     'example': true,
                   },
                 },
@@ -272,7 +273,10 @@ const _openApiSpec = {
             'description':
                 'Routing results with transit paths. effectiveParameters '
                 'reports the values the search actually ran with, after '
-                'defaults and caps.',
+                'defaults and caps; ignoredParameters, present only when '
+                'needed, names the fields received that the pinned '
+                'planner cannot honour (today: directsHideTransfers sent '
+                'as false).',
           },
           '400': {
             'description':

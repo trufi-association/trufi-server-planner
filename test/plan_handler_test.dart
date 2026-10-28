@@ -170,7 +170,8 @@ void main() {
     );
 
     test('directsHideTransfers false is accepted but not applied yet: '
-        'reported as true, same itineraries', () async {
+        'reported as true and listed in ignoredParameters, same '
+        'itineraries', () async {
       // trufi_core_planner v5.27.0 has no such parameter (trufi-core#1043
       // is not released): this test flips when the pin is bumped and the
       // handler forwards the knob.
@@ -180,7 +181,31 @@ void main() {
       });
       expect(status, 200);
       expect(json['effectiveParameters']['directsHideTransfers'], true);
+      expect(json['ignoredParameters'], ['directsHideTransfers']);
       expect(lines(json), lines(none));
+    });
+
+    test('ignoredParameters is absent when nothing was ignored', () async {
+      final (_, none) = await plan(docsExample);
+      final (_, sentTrue) = await plan(docsExample, {
+        'directsHideTransfers': true,
+      });
+      final (_, sentNull) = await plan(docsExample, {
+        'directsHideTransfers': null,
+      });
+      expect(none.containsKey('ignoredParameters'), isFalse);
+      expect(sentTrue.containsKey('ignoredParameters'), isFalse);
+      expect(sentNull.containsKey('ignoredParameters'), isFalse);
+    });
+
+    test('a "no routes" answer lists the ignored knob too', () async {
+      final (status, json) = await plan(docsExample, {
+        'maxStopCandidates': 1,
+        'directsHideTransfers': false,
+      });
+      expect(status, 200);
+      expect(json['success'], false);
+      expect(json['ignoredParameters'], ['directsHideTransfers']);
     });
   });
 

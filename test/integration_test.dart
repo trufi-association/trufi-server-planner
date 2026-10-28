@@ -198,6 +198,7 @@ void main() {
         'maxTransfers': 2,
         'directsHideTransfers': true,
       });
+      expect(data.containsKey('ignoredParameters'), isFalse);
 
       print('✓ Plan knobs passed');
       print('  - effectiveParameters: ${data['effectiveParameters']}');
