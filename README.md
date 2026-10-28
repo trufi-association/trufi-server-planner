@@ -222,6 +222,18 @@ Content-Type: application/json
 }
 ```
 
+#### Parámetros opcionales de `/plan`
+
+| Campo | Tipo | Rango | Default |
+|---|---|---|---|
+| `maxResults` | entero | 1–20 (por encima se recorta) | 20 |
+| `maxWalkDistance` | número | 100–2000 m (por encima se recorta) | 800 |
+| `maxStopCandidates` | entero | 1–1000 (por encima se recorta) | 150 |
+| `maxTransfers` | entero | 0–5 (por encima se recorta) | 1 |
+| `directsHideTransfers` | booleano | — | `true` |
+
+Son los campos que manda el `RemotePlannerClient` de trufi-core (`TrufiPlannerConfig.remote`). Un valor que no es entero/booleano o está por debajo del mínimo responde `400` con `{"error": "<campo> must be ..."}`; ausente o `null` usa el default. La respuesta (con o sin rutas) incluye `effectiveParameters`: los valores con los que corrió la búsqueda, tras defaults y recortes. `directsHideTransfers` se valida pero todavía no se aplica: el `trufi_core_planner` fijado en `pubspec.yaml` (v5.27.0) no tiene el parámetro (llega con trufi-core#1043); mientras tanto `effectiveParameters` lo reporta siempre como `true`.
+
 ## Configuración
 
 ### Variables de Entorno

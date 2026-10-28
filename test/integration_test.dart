@@ -172,6 +172,57 @@ void main() {
       print('  - Correctly rejects invalid input');
     });
 
+    test('Plan route honours the search knobs and reports them', () async {
+      final requestBody = jsonEncode({
+        'from': {'lat': -17.3935, 'lon': -66.1570},
+        'to': {'lat': -17.4000, 'lon': -66.1600},
+        'maxStopCandidates': 5000, // above the cap: clamped to 1000
+        'maxTransfers': 2,
+        'directsHideTransfers': true,
+      });
+
+      final response = await http.post(
+        Uri.parse('$apiBase/plan'),
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody,
+      );
+
+      expect(response.statusCode, 200);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      expect(data['success'], true);
+      expect(data['effectiveParameters'], {
+        'maxResults': 20,
+        'maxWalkDistance': 800.0,
+        'maxStopCandidates': 1000,
+        'maxTransfers': 2,
+        'directsHideTransfers': true,
+      });
+
+      print('✓ Plan knobs passed');
+      print('  - effectiveParameters: ${data['effectiveParameters']}');
+    });
+
+    test('Plan route rejects an invalid knob with 400', () async {
+      final requestBody = jsonEncode({
+        'from': {'lat': -17.3935, 'lon': -66.1570},
+        'to': {'lat': -17.4000, 'lon': -66.1600},
+        'maxTransfers': -1,
+      });
+
+      final response = await http.post(
+        Uri.parse('$apiBase/plan'),
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody,
+      );
+
+      expect(response.statusCode, 400);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      expect(data['error'], contains('maxTransfers'));
+
+      print('✓ Plan knob validation passed');
+      print('  - ${data['error']}');
+    });
+
     test('Web app serves HTML', () async {
       final response = await http.get(Uri.parse('$baseUrl/'));
 
