@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
+import 'package:trufi_server_planner/handlers/plan.dart';
 
 const baseUrl = 'http://localhost:9090';
 const apiBase = '$baseUrl/api';
@@ -176,7 +177,7 @@ void main() {
       final requestBody = jsonEncode({
         'from': {'lat': -17.3935, 'lon': -66.1570},
         'to': {'lat': -17.4000, 'lon': -66.1600},
-        'maxStopCandidates': 5000, // above the cap: clamped to 1000
+        'maxStopCandidates': 5000, // above the cap: clamped
         'maxTransfers': 2,
         'directsHideTransfers': true,
       });
@@ -193,7 +194,7 @@ void main() {
       expect(data['effectiveParameters'], {
         'maxResults': 20,
         'maxWalkDistance': 800.0,
-        'maxStopCandidates': 1000,
+        'maxStopCandidates': maxStopCandidatesCap,
         'maxTransfers': 2,
         'directsHideTransfers': true,
       });

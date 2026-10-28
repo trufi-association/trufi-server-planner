@@ -14,14 +14,26 @@ import '../state.dart';
 /// `maxWalkDistance`); values below the floor or of the wrong type cannot
 /// mean anything and are rejected with 400.
 ///
-/// Caps come from the core's own measurements (trufi-core#1043,
-/// `TrufiPlannerConfig` docs): no stop of the densest feeds has more than
-/// ~520 neighbours within 1 500 m, and the multi-transfer search finds
-/// nothing new above 4-5 changes (Sana'a: 96.3 % of random pairs plannable
-/// with 4, 99.5 % with 5) and stops on its own once no new line is reached.
-/// Sana'a ships `maxTransfers: 4`, Bogotá `2`; both fit.
+/// The stop-pool cap is a COST bound, not a coverage bound. `findRoutes`
+/// is synchronous on the server's single isolate, so one request's search
+/// blocks every other request (including /api/health) for as long as it
+/// runs, and the direct phase grows superlinearly with the pool. Measured
+/// on the pinned planner compiled AOT like the container (Cochabamba feed,
+/// 2 000 m walk — the walk cap): a pool of 150 costs 3-13 ms, 600 costs
+/// 23-122 ms, 1 000 costs 77-328 ms. 600 is what the densest city that
+/// configures the knob needs (Sana'a, trufi-sanaa#28: no stop there has
+/// more than 520 neighbours within 1 500 m, so 600 is "every stop in
+/// range"). Cochabamba's densest stops have ~2 000 neighbours at 1 500 m
+/// and ~3 000 at 2 000 m, and 45 % of its stops have more than 600, so
+/// there the cap does truncate the radius — by design, the price of
+/// keeping a request around 0.1 s. Raising it is one constant.
+///
+/// The transfer cap: the multi-transfer search finds nothing new above 4-5
+/// changes (Sana'a: 96.3 % of random pairs plannable with 4, 99.5 % with
+/// 5) and stops on its own once no new line is reached. Sana'a ships
+/// `maxTransfers: 4`, Bogotá `2`; both fit.
 const maxStopCandidatesDefault = 150;
-const maxStopCandidatesCap = 1000;
+const maxStopCandidatesCap = 600;
 const maxTransfersDefault = 1;
 const maxTransfersCap = 5;
 

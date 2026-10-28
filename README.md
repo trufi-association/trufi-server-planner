@@ -228,7 +228,7 @@ Content-Type: application/json
 |---|---|---|---|
 | `maxResults` | entero | 1–20 (por encima se recorta) | 20 |
 | `maxWalkDistance` | número | 100–2000 m (por encima se recorta) | 800 |
-| `maxStopCandidates` | entero | 1–1000 (por encima se recorta) | 150 |
+| `maxStopCandidates` | entero | 1–600 (por encima se recorta) | 150 |
 | `maxTransfers` | entero | 0–5 (por encima se recorta) | 1 |
 | `directsHideTransfers` | booleano | — | `true` |
 
