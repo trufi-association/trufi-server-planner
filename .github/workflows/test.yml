@@ -21,6 +21,13 @@ jobs:
     - name: Install dependencies
       run: dart pub get
 
+    - name: Analyze and run unit tests
+      # The static pipeline (gzip, Cache-Control, SPA fallback) is tested
+      # without a server; the integration suite below needs the container.
+      run: |
+        dart analyze
+        dart test test/web_app_test.dart
+
     - name: Build Docker image
       run: docker build -t trufi-server-planner:test .
 

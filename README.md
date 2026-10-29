@@ -229,6 +229,12 @@ Content-Type: application/json
 - `PORT`: puerto del servidor (default: `8080`).
 - `GTFS_FILE`: ruta del archivo GTFS dentro del proceso (default: `data/gtfs.zip`).
 
+### Compresión y caché de la web
+
+Los archivos de `web/` salen con `Content-Encoding: gzip` cuando el cliente manda `Accept-Encoding: gzip` (`main.dart.js` 5,0 MB → 1,4 MB; `search.json` 1,4 MB → 0,36 MB). Los tipos ya comprimidos (PNG, WOFF2, ZIP…), los cuerpos de menos de 512 bytes, los `304`, los `HEAD` y las respuestas parciales (`Range`) van tal cual; `/api/*` no se toca.
+
+`Cache-Control`: `no-cache` para todo el build (Flutter no pone hash en los nombres, así que el navegador guarda los bytes pero revalida con `ETag`/`Last-Modified` y recibe `304`), y `public, max-age=31536000, immutable` para nombres con hash de contenido (`main.dart.<hash>.js`, lo que produce `flutter build web --web-content-hash`). Lógica y tests: `lib/web_app.dart`, `test/web_app_test.dart`.
+
 ### Archivo GTFS
 
 El servidor lee el feed desde `data/gtfs.zip` (relativo al cwd del proceso, o `/app/data/gtfs.zip` en docker). El directorio `data/` está gitignoreado: cada deploy/dev pone su propio feed allí.
