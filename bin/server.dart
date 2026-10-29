@@ -7,6 +7,7 @@ import 'package:trufi_core_planner/trufi_core_planner.dart';
 
 import 'package:trufi_server_planner/state.dart';
 import 'package:trufi_server_planner/middleware.dart';
+import 'package:trufi_server_planner/precompress.dart';
 import 'package:trufi_server_planner/web_app.dart';
 import 'package:trufi_server_planner/handlers/health.dart';
 import 'package:trufi_server_planner/handlers/stops.dart';
@@ -53,19 +54,26 @@ Future<void> main() async {
     ..get('/api/docs', swaggerUiHandler)
     ..get('/api/openapi.json', openApiSpecHandler);
 
-  // Flutter web app: static files + SPA fallback + Cache-Control + gzip
+  // Flutter web app: static files + SPA fallback + Cache-Control + gzip.
+  // The `.gz` sidecars are (re)written here at every start, so a new build
+  // copied into web/ followed by a restart is all a deploy needs; set
+  // PRECOMPRESS_WEB=0 to serve whatever sidecars are there, or none.
+  if (Platform.environment['PRECOMPRESS_WEB'] != '0') {
+    try {
+      print('Web: ${await precompressDirectory('web')}');
+    } catch (e) {
+      // A read-only or missing web/ (the CI mounts it :ro) means no
+      // sidecars, never a server that fails to start.
+      stderr.writeln('Web: precompress skipped: $e');
+    }
+  }
   final webHandler = createWebAppHandler('web');
 
   // Cascade: API first, then static files
   final handler = Pipeline()
       .addMiddleware(logRequests())
       .addMiddleware(corsMiddleware())
-      .addHandler(
-        Cascade()
-            .add(apiRouter.call)
-            .add(webHandler)
-            .handler,
-      );
+      .addHandler(Cascade().add(apiRouter.call).add(webHandler).handler);
 
   final server = await shelf_io.serve(handler, '0.0.0.0', port);
   print('Server listening on http://${server.address.host}:${server.port}');
