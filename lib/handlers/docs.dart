@@ -223,15 +223,45 @@ const _openApiSpec = {
                   'maxResults': {
                     'type': 'integer',
                     'description':
-                        'Maximum paths to return (1-20). Defaults to 20.',
+                        'Maximum paths to return (1-20; values outside '
+                        'the range are clamped). Defaults to 20.',
                     'example': 20,
                   },
                   'maxWalkDistance': {
                     'type': 'number',
                     'description':
                         'Walk radius to board/alight, in meters '
-                        '(100-2000). Defaults to 800.',
+                        '(100-2000; values outside the range are '
+                        'clamped). Defaults to 800.',
                     'example': 800,
+                  },
+                  'maxStopCandidates': {
+                    'type': 'integer',
+                    'description':
+                        'Stops considered around the origin and the '
+                        'destination, nearest first within '
+                        'maxWalkDistance (1-600; higher values are '
+                        'capped). Defaults to 150, the planner default.',
+                    'example': 150,
+                  },
+                  'maxTransfers': {
+                    'type': 'integer',
+                    'description':
+                        'Most bus changes an itinerary may have (0-5; '
+                        'higher values are capped). 0 returns direct '
+                        'lines only. Defaults to 1.',
+                    'example': 1,
+                  },
+                  'directsHideTransfers': {
+                    'type': 'boolean',
+                    'description':
+                        'Whether a direct line hides the one-transfer '
+                        'options. Accepted and validated; the pinned '
+                        'planner (trufi_core_planner v5.27.0) does not '
+                        'expose the knob yet, so the search always runs '
+                        'with true; sending false is reported in '
+                        'ignoredParameters.',
+                    'example': true,
                   },
                 },
               },
@@ -240,7 +270,23 @@ const _openApiSpec = {
         },
         'responses': {
           '200': {
-            'description': 'Routing results with transit paths',
+            'description':
+                'Routing results with transit paths. effectiveParameters '
+                'reports the values the search actually ran with, after '
+                'defaults and caps; ignoredParameters, present only when '
+                'needed, names the fields received that the pinned '
+                'planner cannot honour (today: directsHideTransfers sent '
+                'as false).',
+          },
+          '400': {
+            'description':
+                'Missing from/to coordinates; a field of the wrong type '
+                '(maxResults/maxWalkDistance not a number, '
+                'maxStopCandidates/maxTransfers not an integer, '
+                'directsHideTransfers not a boolean); or '
+                'maxStopCandidates/maxTransfers below the floor. The '
+                'first offending field, in the order above, is reported: '
+                '{"error": "maxTransfers must be >= 0"}.',
           },
         },
       },

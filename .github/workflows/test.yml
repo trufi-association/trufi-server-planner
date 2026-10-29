@@ -54,6 +54,12 @@ jobs:
     - name: Run integration tests
       run: dart test test/integration_test.dart
 
+    - name: Run plan handler tests
+      # Loads example.gtfs.zip in-process and calls the handler directly;
+      # needs no container, so a Docker failure above must not skip it.
+      if: success() || failure()
+      run: dart test test/plan_handler_test.dart
+
     - name: Show server logs on failure
       if: failure()
       run: docker logs trufi-test
