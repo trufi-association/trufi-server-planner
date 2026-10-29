@@ -256,11 +256,9 @@ const _openApiSpec = {
                     'type': 'boolean',
                     'description':
                         'Whether a direct line hides the one-transfer '
-                        'options. Accepted and validated; the pinned '
-                        'planner (trufi_core_planner v5.27.0) does not '
-                        'expose the knob yet, so the search always runs '
-                        'with true; sending false is reported in '
-                        'ignoredParameters.',
+                        'options (trufi-core#1043). Defaults to true; '
+                        'false lists the one-transfer itineraries after '
+                        'the direct ones, nothing extra is searched.',
                     'example': true,
                   },
                 },
@@ -275,8 +273,8 @@ const _openApiSpec = {
                 'reports the values the search actually ran with, after '
                 'defaults and caps; ignoredParameters, present only when '
                 'needed, names the fields received that the pinned '
-                'planner cannot honour (today: directsHideTransfers sent '
-                'as false).',
+                'planner cannot honour (none since trufi_core_planner '
+                'v5.28.0).',
           },
           '400': {
             'description':
