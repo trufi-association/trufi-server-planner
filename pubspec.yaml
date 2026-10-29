@@ -19,7 +19,7 @@ dependencies:
   trufi_core_planner:
     git:
       url: https://github.com/trufi-association/trufi-core.git
-      ref: v5.27.0
+      ref: v5.28.0
       path: packages/trufi_core_planner
 
   # Additional dependencies
