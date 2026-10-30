@@ -18,22 +18,26 @@ import '../state.dart';
 /// is synchronous on the server's single isolate, so one request's search
 /// blocks every other request (including /api/health) for as long as it
 /// runs, and the direct phase grows superlinearly with the pool. Measured
-/// on the pinned planner compiled AOT like the container (Cochabamba feed,
-/// 2 000 m walk — the walk cap): a pool of 150 costs 3-13 ms, 600 costs
-/// 23-122 ms, 1 000 costs 77-328 ms. 600 is what the densest city that
-/// configures the knob needs (Sana'a, trufi-sanaa#28: no stop there has
-/// more than 520 neighbours within 1 500 m, so 600 is "every stop in
-/// range"). Cochabamba's densest stops have ~2 000 neighbours at 1 500 m
-/// and ~3 000 at 2 000 m, and 45 % of its stops have more than 600, so
+/// on the pinned planner compiled AOT like the container (Cochabamba feed
+/// of 23 671 stops, 2 000 m walk — the walk cap): a pool of 150 costs
+/// 3-6 ms, 600 costs 29-119 ms, 800 costs 61-202 ms, 1 000 costs
+/// 99-296 ms (best of three on four pairs; over HTTP on 100 downtown pairs
+/// the p95 is 101, 184 and 276 ms for 600, 800 and 1 000, and at the 800 m
+/// walk the app sends 99, 123 and 123 ms). 800 is what the densest city
+/// that configures the knob needs (Cochabamba, trufi-app#71: no stop there
+/// has more than 778 neighbours within its 800 m walking radius, so 800 is
+/// "every stop in range" and 1 000 would cost the same; Sana'a sends 600,
+/// trufi-sanaa#28, no stop there has more than 520 within 1 500 m). At the
+/// 2 000 m walk cap Cochabamba's densest stops have ~3 000 neighbours, so
 /// there the cap does truncate the radius — by design, the price of
-/// keeping a request around 0.1 s. Raising it is one constant.
+/// keeping a request around 0.1-0.2 s. Raising it is one constant.
 ///
 /// The transfer cap: the multi-transfer search finds nothing new above 4-5
 /// changes (Sana'a: 96.3 % of random pairs plannable with 4, 99.5 % with
 /// 5) and stops on its own once no new line is reached. Sana'a ships
 /// `maxTransfers: 4`, Bogotá `2`; both fit.
 const maxStopCandidatesDefault = 150;
-const maxStopCandidatesCap = 600;
+const maxStopCandidatesCap = 800;
 const maxTransfersDefault = 1;
 const maxTransfersCap = 5;
 

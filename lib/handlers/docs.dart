@@ -240,7 +240,7 @@ const _openApiSpec = {
                     'description':
                         'Stops considered around the origin and the '
                         'destination, nearest first within '
-                        'maxWalkDistance (1-600; higher values are '
+                        'maxWalkDistance (1-800; higher values are '
                         'capped). Defaults to 150, the planner default.',
                     'example': 150,
                   },
