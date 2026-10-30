@@ -16,7 +16,10 @@ void main() {
   // lines with the default pool of 150 stops, twelve with 600 and none
   // with 1; [northEast] has no direct line and fifteen one-transfer paths;
   // [farWest] has nothing with 0 or 1 transfers and twenty 2-transfer
-  // paths (found by the fresh review of PR #10).
+  // paths (found by the fresh review of PR #10); [downtown] has more than
+  // 600 stops within 800 m of both ends and answers with twenty direct
+  // lines, among which the 33 (Trufi 121) only once the pool reaches 800
+  // (the stops ranked 601-800; sweep of the cap PR, trufi-app#71's value).
   const docsExample = {
     'from': {'lat': -17.420536, 'lon': -66.143176},
     'to': {'lat': -17.384842, 'lon': -66.147902},
@@ -28,6 +31,10 @@ void main() {
   const farWest = {
     'from': {'lat': -17.535196, 'lon': -66.3354927},
     'to': {'lat': -17.4013699, 'lon': -66.0613446},
+  };
+  const downtown = {
+    'from': {'lat': -17.3878387, 'lon': -66.1644142},
+    'to': {'lat': -17.4049692, 'lon': -66.1508767},
   };
   const defaults = {
     'maxResults': 20,
@@ -309,6 +316,31 @@ void main() {
       );
       expect(status, 400);
       expect(json['error'], 'maxStopCandidates must be >= 1');
+    });
+
+    test('the cap is at least the pool trufi-app sends, and that pool runs '
+        'as sent', () async {
+      // trufi-app#71: 800, the first round number above the 778 stops the
+      // densest point of Cochabamba has within the app's 800 m walking
+      // radius. Clamping it would make the web differ from the phone on
+      // the trips that need the stops ranked 601-778.
+      expect(maxStopCandidatesCap, greaterThanOrEqualTo(800));
+      final (status, json) = await plan(docsExample, {
+        'maxStopCandidates': 800,
+      });
+      expect(status, 200);
+      expect(json['effectiveParameters']['maxStopCandidates'], 800);
+    });
+
+    test('the stops ranked 601-800 bring a line into a downtown answer that '
+        '600 does not offer', () async {
+      final (_, at600) = await plan(downtown, {'maxStopCandidates': 600});
+      final (_, at800) = await plan(downtown, {'maxStopCandidates': 800});
+      expect(at600['success'], true);
+      expect(at800['success'], true);
+      expect(at800['effectiveParameters']['maxStopCandidates'], 800);
+      expect(lines(at600), isNot(contains('33')));
+      expect(lines(at800), contains('33'));
     });
   });
 
