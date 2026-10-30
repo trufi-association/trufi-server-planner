@@ -158,26 +158,19 @@ Future<Response> planHandler(Request request) async {
       min: 0,
       max: maxTransfersCap,
     );
-    // Validated so a wrong type fails loudly today, but not forwarded: the
-    // planner pinned in pubspec.yaml (trufi_core_planner v5.27.0) has no
-    // such parameter — its rule is hardwired to "a direct line hides the
-    // one-transfer options". The knob lands with trufi-core#1043; once the
-    // pin reaches a release that has it, pass the requested value to
-    // `findRoutes`, report it instead of the constant, and the ignored
-    // list below empties itself.
-    final requestedDirectsHideTransfers = readBoolField(
+    // trufi_core_planner v5.28.0 (trufi-core#1043) exposes the knob, so the
+    // requested value reaches `findRoutes`. The default keeps the rule the
+    // planner always had: a direct line hides the one-transfer options.
+    final directsHideTransfers = readBoolField(
       json,
       'directsHideTransfers',
       fallback: true,
     );
-    const directsHideTransfers = true;
     // Fields the client sent that the pinned planner cannot honour, named
-    // explicitly: a client that sent `false` and reads `true` should not
-    // have to infer the gap from the itineraries.
-    final ignoredParameters = [
-      if (requestedDirectsHideTransfers != directsHideTransfers)
-        'directsHideTransfers',
-    ];
+    // explicitly so a client does not have to infer the gap from the
+    // itineraries. Empty since v5.28.0; the mechanism stays for the next
+    // knob that reaches a request before its pin.
+    final ignoredParameters = <String>[];
 
     final paths = routingService.findRoutes(
       origin: LatLng(fromLat, fromLon),
@@ -188,6 +181,7 @@ Future<Response> planHandler(Request request) async {
       maxTransferPaths: maxResults,
       maxStopCandidates: maxStopCandidates,
       maxTransfers: maxTransfers,
+      directsHideTransfers: directsHideTransfers,
     );
 
     // What the search actually ran with, after defaults and caps: lets a

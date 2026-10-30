@@ -194,20 +194,22 @@ void main() {
       },
     );
 
-    test('directsHideTransfers false is accepted but not applied yet: '
-        'reported as true and listed in ignoredParameters, same '
-        'itineraries', () async {
-      // trufi_core_planner v5.27.0 has no such parameter (trufi-core#1043
-      // is not released): this test flips when the pin is bumped and the
-      // handler forwards the knob.
+    test('directsHideTransfers false reaches the planner: reported as '
+        'false, nothing ignored, the direct lines first and in the same '
+        'order', () async {
+      // trufi_core_planner v5.28.0 (trufi-core#1043): with false the
+      // one-transfer bucket follows the direct one instead of being hidden
+      // by it, so the default answer is a prefix of the new one.
       final (_, none) = await plan(docsExample);
       final (status, json) = await plan(docsExample, {
         'directsHideTransfers': false,
       });
       expect(status, 200);
-      expect(json['effectiveParameters']['directsHideTransfers'], true);
-      expect(json['ignoredParameters'], ['directsHideTransfers']);
-      expect(lines(json), lines(none));
+      expect(json['effectiveParameters']['directsHideTransfers'], false);
+      expect(json.containsKey('ignoredParameters'), isFalse);
+      final directs = lines(none);
+      expect(lines(json).take(directs.length), orderedEquals(directs));
+      expect(lines(json).length, greaterThanOrEqualTo(directs.length));
     });
 
     test('ignoredParameters is absent when nothing was ignored', () async {
@@ -223,14 +225,16 @@ void main() {
       expect(sentNull.containsKey('ignoredParameters'), isFalse);
     });
 
-    test('a "no routes" answer lists the ignored knob too', () async {
+    test('a "no routes" answer reports the knob too, nothing ignored',
+        () async {
       final (status, json) = await plan(docsExample, {
         'maxStopCandidates': 1,
         'directsHideTransfers': false,
       });
       expect(status, 200);
       expect(json['success'], false);
-      expect(json['ignoredParameters'], ['directsHideTransfers']);
+      expect(json['effectiveParameters']['directsHideTransfers'], false);
+      expect(json.containsKey('ignoredParameters'), isFalse);
     });
   });
 
@@ -452,7 +456,7 @@ void main() {
         );
         expect(
           properties['directsHideTransfers']['description'],
-          contains('ignoredParameters'),
+          contains('trufi-core#1043'),
         );
         final responses = post['responses'] as Map<String, dynamic>;
         expect(responses.keys, containsAll(['200', '400']));
